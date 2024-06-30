@@ -4,3 +4,6 @@ venv:
 
 run:
 	venv/bin/python clubbot.py
+
+debug:
+	venv/bin/python -m pdb clubbot.py
