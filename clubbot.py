@@ -1,10 +1,12 @@
 #!/bin/python3
+import asyncio
 import os
 import lxml
 
 import Feeds
 
 import discord
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
 
@@ -57,17 +59,7 @@ FEEDS = [
 @client.event
 async def on_ready():
     print(f"{client.user.name} has connected to Discord!")
-    print("Updating feeds...")
-    for feed in FEEDS:
-        await feed.update()
-    print()
-
-    print("Posting new feed items...")
-    for feed in FEEDS:
-        await feed.post_new_feed_items()
-    print()
-
-    print("Done.")
+    feed_update_task.start()
 
 
 @client.event
@@ -80,6 +72,22 @@ async def on_member_join(member):
 async def on_message(message):
     if message.author != client.user and message.content.startswith(CMD_PREFIX):
         await message.channel.send("No commands implemented yet.")
+
+
+@tasks.loop(hours=1)
+async def feed_update_task():
+    await client.wait_until_ready()
+    print("Updating feeds...")
+    for feed in FEEDS:
+        await feed.update()
+    print()
+
+    print("Posting new feed items...")
+    for feed in FEEDS:
+        await feed.post_new_feed_items()
+
+    print("Done.")
+    print()
 
 
 client.run(TOKEN)
