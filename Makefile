@@ -1,4 +1,7 @@
+.PHONY: run venv debug
+
 venv:
+	rm -rf venv
 	python -m venv venv
 	venv/bin/pip install -r requirements.txt
 
