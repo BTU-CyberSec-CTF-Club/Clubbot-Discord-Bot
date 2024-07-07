@@ -10,6 +10,10 @@ from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from bs4 import BeautifulSoup
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from Util import fancy_format_datetime, fancy_format_duration
 
 REQUESTS_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
@@ -63,7 +67,7 @@ class RSSFeed(ABC):
             etag=self.last_feedupdate_etag,
             modified=self.last_feedupdate_modified,
         )
-        print(f"Updating feed for {self.feed_url}...")
+        logger.info(f"Updating feed for {self.feed_url}...")
 
         # Determine last seen ID in case of initial execution
         if self.last_seen_item_id is None:
@@ -100,7 +104,7 @@ class RSSFeed(ABC):
         new_rss_feeditems = []
         for entry in self._iter_feedentries(f):
             if entry.id != self.last_seen_item_id:
-                print(f"\tFound new feeditem with ID {entry.id}")
+                logger.info(f"\tFound new feeditem with ID {entry.id}")
                 feed_item = self.make_feeditem(entry)
                 new_rss_feeditems.append(feed_item)
             else:
@@ -354,7 +358,7 @@ class NewsFeed(RSSFeed):
                             if "type" in m.attrs
                             and m.attrs["type"] == "application/ld+json"
                         ]
-                    except IndexError:
+                    except (KeyError, IndexError):
                         author_in_jsonld_scripts = []
 
                 author_options = (

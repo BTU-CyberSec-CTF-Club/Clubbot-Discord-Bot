@@ -2,6 +2,23 @@
 import asyncio
 import os
 import lxml
+import traceback
+import sys
+
+import logging
+from logging.handlers import RotatingFileHandler
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        RotatingFileHandler("runtime.log", maxBytes=256 * 1024 * 1024, backupCount=1),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+
+logger.setLevel(logging.DEBUG)
 
 import Feeds
 
@@ -58,7 +75,7 @@ FEEDS = [
 
 @client.event
 async def on_ready():
-    print(f"{client.user.name} has connected to Discord!")
+    logger.info(f"{client.user.name} has connected to Discord!")
     feed_update_task.start()
 
 
@@ -76,18 +93,21 @@ async def on_message(message):
 
 @tasks.loop(hours=1)
 async def feed_update_task():
-    await client.wait_until_ready()
-    print("Updating feeds...")
-    for feed in FEEDS:
-        await feed.update()
-    print()
+    try:
+        await client.wait_until_ready()
+        logger.info("Updating feeds...")
+        for feed in FEEDS:
+            await feed.update()
+        logger.info("")
 
-    print("Posting new feed items...")
-    for feed in FEEDS:
-        await feed.post_new_feed_items()
+        logger.info("Posting new feed items...")
+        for feed in FEEDS:
+            await feed.post_new_feed_items()
 
-    print("Done.")
-    print()
+        logger.info("Done.")
+        logger.info("")
+    except RuntimeError:
+        logger.exception("Error in Feed Update Task")
 
 
 client.run(TOKEN)
