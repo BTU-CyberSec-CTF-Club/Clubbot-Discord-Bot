@@ -79,16 +79,16 @@ async def on_ready():
     feed_update_task.start()
 
 
-@client.event
-async def on_member_join(member):
-    await member.create_dm()
-    await member.dm_channel.send(f"Hi {member.name}, welcome to my Discord server!")
+# @client.event
+# async def on_member_join(member):
+#     await member.create_dm()
+#     await member.dm_channel.send(f"Hi {member.name}, welcome to my Discord server!")
 
 
 @client.event
 async def on_message(message):
     if message.author != client.user and message.content.startswith(CMD_PREFIX):
-        await message.channel.send("No commands implemented yet.")
+        await message.channel.send("Sorry folks, no commands are implemented yet.")
 
 
 @tasks.loop(hours=1)
