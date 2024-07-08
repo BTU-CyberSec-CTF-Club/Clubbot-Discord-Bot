@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.template
 venv/
 feeds/
 __pycache__/
