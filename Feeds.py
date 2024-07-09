@@ -358,7 +358,7 @@ class NewsFeed(RSSFeed):
                             if "type" in m.attrs
                             and m.attrs["type"] == "application/ld+json"
                         ]
-                    except (KeyError, IndexError):
+                    except (KeyError, IndexError, TypeError):
                         author_in_jsonld_scripts = []
 
                 author_options = (
@@ -375,7 +375,6 @@ class NewsFeed(RSSFeed):
 
     def make_feeditem_embed(self, feeditem):
         self.finalize_feeditem(feeditem)
-
         color = discord.Color.random()
 
         # Embed with baseinfo
