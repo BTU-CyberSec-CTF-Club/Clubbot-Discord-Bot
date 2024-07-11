@@ -159,7 +159,10 @@ class RSSFeed(ABC):
 
         for feeditem in post_candidates[-self.MAX_FEEDITEMS_POSTED :]:
             embed = self.make_feeditem_embed(feeditem)
-            await self.client.get_channel(self.associated_channel).send(embed=embed)
+            try:
+                await self.client.get_channel(self.associated_channel).send(embed=embed)
+            except Exception:
+                logger.exception(f"Could not post embed {embed} due to errors")
 
             available_feeditems.remove(feeditem)
 
@@ -243,7 +246,7 @@ class NewsFeed(RSSFeed):
     def make_feeditem(self, entry):
         feeditem = {
             "id": entry.id,
-            "title": entry.title,
+            "title": entry.title.replace("&amp;", "&").replace("&quot", '"'),
             "url": entry.link,
             "thumbnail": None,
             "publish_date": datetime.datetime.fromtimestamp(
@@ -369,7 +372,9 @@ class NewsFeed(RSSFeed):
                 author = author_options[0] if len(author_options) > 0 else None
 
             feeditem.thumbnail = thumb
-            feeditem.description = description
+            feeditem.description = description.replace("&amp;", "&").replace(
+                "&quot", '"'
+            )
             feeditem.author = author
             feeditem.is_finalized = True
 

@@ -106,7 +106,7 @@ async def feed_update_task():
 
         logger.info("Done.")
         logger.info("")
-    except RuntimeError:
+    except Exception:
         logger.exception("Error in Feed Update Task")
 
 
