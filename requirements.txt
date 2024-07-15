@@ -4,3 +4,4 @@ discord
 requests
 bs4
 lxml
+python-dateutil

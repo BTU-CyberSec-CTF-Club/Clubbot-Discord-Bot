@@ -5,6 +5,7 @@ import json
 import time
 import discord
 from lxml import html
+import dateutil.parser
 
 from types import SimpleNamespace
 from abc import ABC, abstractmethod
@@ -412,7 +413,7 @@ class CTFTimeFeed(RSSFeed):
 
     def feeditem_posting_condition(self, feeditem):
         # Only make posts if the CTF is within the next 6 weeks
-        return datetime.datetime.fromisoformat(feeditem.start_date) < (
+        return dateutil.parser.isoparse(feeditem.start_date) < (
             datetime.datetime.now() + datetime.timedelta(days=6 * 7)
         )
 
@@ -495,10 +496,10 @@ class CTFTimeFeed(RSSFeed):
 
         # More specific event info in footer
         start_date_string = fancy_format_datetime(
-            datetime.datetime.fromisoformat(feeditem.start_date)
+            dateutil.parser.isoparse(feeditem.start_date)
         )
         end_date_string = fancy_format_datetime(
-            datetime.datetime.fromisoformat(feeditem.end_date)
+            dateutil.parser.isoparse(feeditem.end_date)
         )
 
         duration_string = fancy_format_duration(
