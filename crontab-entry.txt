@@ -1,0 +1,3 @@
+@reboot cd <clubbot folderpath> && sleep 120 && make run
+
+# Sleep 120 is to make reasonably sure that the network interface will be up

@@ -1,13 +1,16 @@
-.PHONY: run venv debug
+.PHONY: run debug
 
-venv:
+venv: requirements.txt
 	rm -rf venv
-	python -m venv venv
+	python3 -m venv venv
 	venv/bin/pip install -r requirements.txt
 
-run:
+run: venv
 	rm -f runtime.log
-	venv/bin/python clubbot.py 2>&1
+	venv/bin/python3 clubbot.py 2>&1
 
-debug:
-	venv/bin/python -m pdb clubbot.py
+debug: venv
+	venv/bin/python3 -m pdb clubbot.py
+
+clean:
+	rm -rf __pycache__ runtime.log

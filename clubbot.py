@@ -1,9 +1,8 @@
 #!/bin/python3
-import asyncio
 import os
-import lxml
-import traceback
 import sys
+import time
+from aiohttp.client_exceptions import ClientConnectorError
 
 import logging
 from logging.handlers import RotatingFileHandler
