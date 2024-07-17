@@ -7,6 +7,7 @@ cat > "/tmp/mergefilter.txt" <<-EOH
 	- runtime.log
 	- gitignore
 	- .env.template
+	- .git
 EOH
 
 rsync -avzu --delete --progress -h --filter="merge /tmp/mergefilter.txt" ./ japan:/home/mildnfab/clubbot
