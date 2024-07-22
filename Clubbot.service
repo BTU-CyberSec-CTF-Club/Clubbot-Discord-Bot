@@ -1,5 +1,6 @@
 # To be installed in .config/systemd/user
 # Run systemctl --user daemon-reload, then systemctl --user enable Clubbot.service, then systemctl --user start Clubbot.service
+# And run loginctl enable-linger $USER to ensure the service runs even when not logged-in
 [Unit]
 Description=Clubbot Discord Bot of the BTU CTF Club
 After=network-online.target
