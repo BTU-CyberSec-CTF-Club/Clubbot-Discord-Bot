@@ -6,10 +6,15 @@ import time
 import discord
 from lxml import html
 import dateutil.parser
+import pytz
+
+utc_tz = pytz.timezone("Etc/UTC")
+berlin_tz = pytz.timezone("Europe/Berlin")
 
 from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from bs4 import BeautifulSoup
+
 
 import logging
 
@@ -184,7 +189,7 @@ class SecurityNowFeed(RSSFeed):
             "url": entry.link,
             "thumbnail": entry.image["href"],
             "publish_date": datetime.datetime.fromtimestamp(
-                time.mktime(entry.published_parsed)
+                time.mktime(entry.published_parsed), tz=utc_tz
             ),
             "author": "Security Now! with Steve Gibson",
             "episode": entry.podcast_episode,
@@ -251,7 +256,7 @@ class NewsFeed(RSSFeed):
             "url": entry.link,
             "thumbnail": None,
             "publish_date": datetime.datetime.fromtimestamp(
-                time.mktime(entry.published_parsed)
+                time.mktime(entry.published_parsed), tz=utc_tz
             ),
             "author": None,
             "description": None,
@@ -495,12 +500,10 @@ class CTFTimeFeed(RSSFeed):
         embed.set_thumbnail(url=feeditem.logo_url)
 
         # More specific event info in footer
-        start_date_string = fancy_format_datetime(
-            dateutil.parser.isoparse(feeditem.start_date)
-        )
-        end_date_string = fancy_format_datetime(
-            dateutil.parser.isoparse(feeditem.end_date)
-        )
+        start_datetime = utc_tz.localize(dateutil.parser.isoparse(feeditem.start_date))
+        start_date_string = fancy_format_datetime(start_datetime.astimezone(berlin_tz))
+        end_datetime = utc_tz.localize(dateutil.parser.isoparse(feeditem.end_date))
+        end_date_string = fancy_format_datetime(end_datetime.astimezone(berlin_tz))
 
         duration_string = fancy_format_duration(
             feeditem.duration["days"], feeditem.duration["hours"]
