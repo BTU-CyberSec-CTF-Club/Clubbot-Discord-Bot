@@ -7,10 +7,10 @@ import discord
 from lxml import html
 import dateutil.parser
 import pytz
+from Common import CTF_FLAG_EMOJI, REQUESTS_HEADERS, fetch_ctftime_api_info
 
 utc_tz = pytz.timezone("Etc/UTC")
 berlin_tz = pytz.timezone("Europe/Berlin")
-
 from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from bs4 import BeautifulSoup
@@ -21,8 +21,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 from Util import fancy_format_datetime, fancy_format_duration
-
-REQUESTS_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
 
 class RSSFeed(ABC):
@@ -35,6 +33,7 @@ class RSSFeed(ABC):
     unposted_feed_items = None  # List of feed items that have not been posted in the last iterations (from oldest to newest)
     associated_channel = None
     reversed_recency = False
+    msg_emoji = None  # An emoji to add to every message
 
     MAX_FEEDITEMS_POSTED = 10
 
@@ -166,7 +165,11 @@ class RSSFeed(ABC):
         for feeditem in post_candidates[-self.MAX_FEEDITEMS_POSTED :]:
             embed = self.make_feeditem_embed(feeditem)
             try:
-                await self.client.get_channel(self.associated_channel).send(embed=embed)
+                msg = await self.client.get_channel(self.associated_channel).send(
+                    embed=embed
+                )
+                if self.msg_emoji:
+                    await msg.add_reaction(self.msg_emoji)
             except Exception:
                 logger.exception(f"Could not post embed {embed} due to errors")
 
@@ -408,11 +411,11 @@ class NewsFeed(RSSFeed):
 
 
 class CTFTimeFeed(RSSFeed):
-    ctftime_api_urlformat = "https://ctftime.org/api/v1/events/{event_id}/"
     MAX_DESCRIPTION_LENGTH = 1000
     MAX_FEEDITEMS_POSTED = 15
 
     def __init__(self, client, feed_url, associated_channel, reversed_recency=True):
+        self.msg_emoji = CTF_FLAG_EMOJI
 
         super().__init__(client, feed_url, associated_channel, reversed_recency)
 
@@ -509,7 +512,11 @@ class CTFTimeFeed(RSSFeed):
             feeditem.duration["days"], feeditem.duration["hours"]
         )
         location_string = feeditem.location if feeditem.onsite == "True" else "Online"
-        footer_text = f"📌 {location_string} | ⛳ {feeditem.ctf_format} | 👮 {feeditem.restrictions}\n📅 {start_date_string} - {end_date_string} • ⏳ {duration_string}"
+        footer_text = (
+            f"📌 {location_string} | ⛳ {feeditem.ctf_format} | 👮 {feeditem.restrictions}\n"
+            + f"📅 {start_date_string} - {end_date_string} • ⏳ {duration_string}\n"
+            + f"{feeditem.id}"
+        )
         embed.set_footer(text=footer_text, icon_url=None)
 
         return embed
