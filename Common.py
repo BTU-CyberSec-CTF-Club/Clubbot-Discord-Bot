@@ -14,7 +14,7 @@ def fetch_ctftime_api_info(ctftime_event_url):
         The url to the ctftime event, e.g. https://ctftime.org/event/2404
 
     Returns:
-        The JSON Object. Example:
+        The JSON Object. Example contents:
             organizers
                 0
                 id	182074

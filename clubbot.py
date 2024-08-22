@@ -1,12 +1,12 @@
 #!/bin/python3
 import os
-import sys
-import time
-from aiohttp.client_exceptions import ClientConnectorError
 from Common import CTF_FLAG_EMOJI, fetch_ctftime_api_info
-from Util import print, print_exception
-import Util
-import traceback
+from Util import print, print_exception, as_kebab_case
+import dateutil.parser
+import requests
+from PIL import Image
+import random
+
 
 import Feeds
 
@@ -60,7 +60,6 @@ FEEDS = [
         client, "https://feeds.twit.tv/sn.xml", int(os.getenv("SECURITY_NOW_CHANNEL"))
     ),
 ]
-# TODO: Full-disclosure, reddit-netsec
 
 
 @client.event
@@ -81,30 +80,117 @@ async def on_message(message):
         await message.channel.send("Sorry folks, no commands are implemented yet.")
 
 
-# useful example: https://stackoverflow.com/a/52212888
+CTF_CATEGORY_ID = 1276222859869556736
+UPCOMING_CTFS_CHANNEL_ID = 1257130278560858144
+
+
+def bannerize_logo(logo_link):
+    _, ending = logo_link.rsplit(".", maxsplit=1)
+
+    distinguisher = random.randint(0, 2**16)
+    download_logofile_name = f"/tmp/logofile-{distinguisher}.{ending}"
+    edited_logofile_name = f"/tmp/logofile-{distinguisher}-edit.png"
+
+    r = requests.get(logo_link)
+    with open(download_logofile_name, "wb") as logofile:
+        for chunk in r:
+            logofile.write(chunk)
+
+    pil_img = Image.open(download_logofile_name)
+    img_width, img_height = pil_img.size
+    new_img_width = int(img_height / 2 * 5)  # Discord recommends a banner in 5:2 format
+    if new_img_width > img_width:
+        os.system(
+            f"magick {download_logofile_name} -gravity center -background none -extent {new_img_width}x{img_height} {edited_logofile_name}"
+        )
+
+    with open(edited_logofile_name, "rb") as logofile:
+        logofile_bytes = logofile.read()
+
+    return logofile_bytes
+
+
 @client.event
 async def on_raw_reaction_add(payload):
+    guild = client.get_guild(payload.guild_id)
+
     if payload.user_id == client.user.id:
         # Don't react to emojis done by the bot
         return
 
     if payload.channel_id == int(os.getenv("CTFTIME_CHANNEL")):
         if str(payload.emoji) == CTF_FLAG_EMOJI:
+            # NOTE: If the system is abused, could also check if user is organizer before doing any of the following
+
+            # Determine what message / CTF this is
             ctftime_msg = await client.get_channel(payload.channel_id).fetch_message(
                 payload.message_id
             )
             ctftime_embed = ctftime_msg.embeds[0]
             ctftime_url = ctftime_embed.footer.text.split("\n")[-1]
+
+            # Gain necessary CTF info for creating the event
             ctftime_api_info = fetch_ctftime_api_info(ctftime_url)
 
+            title = ctftime_api_info["title"]
+            start_time = dateutil.parser.isoparse(ctftime_api_info["start"])
+            end_time = dateutil.parser.isoparse(ctftime_api_info["finish"])
+
+            ctf_website = ctftime_api_info["url"]
+            event_desc = ctftime_api_info["description"]
+            msglink = f"https://discord.com/channels/{payload.guild_id}/{payload.channel_id}/{payload.message_id}"
+            description = f"Official Website: {ctf_website} || See {msglink} for more information.\n---\n{event_desc}"
+            logo = ctftime_api_info["logo"]
+
+            # Create a text channel for the CTF
+            new_channel_name = as_kebab_case(title)
+            existing_channel = discord.utils.get(guild.channels, name=new_channel_name)
+            if existing_channel:
+                print(
+                    "A flag-reaction was given, but a fitting ctf channel already seems to exist. Returning."
+                )
+                return
+
+            tournament_channel = await guild.create_text_channel(
+                new_channel_name,
+                category=guild.get_channel(CTF_CATEGORY_ID),
+            )
+            location = f"https://discord.com/channels/{payload.guild_id}/{tournament_channel.id}"
+
             # Create an Event
-            # title
-            # logo (may be empty)
-            # Channel (to be created)
-            # Start date and time
-            # End date and time
-            # Description referring to this message id
-            # https://gist.github.com/adamsbytes/8445e2f9a97ae98052297a4415b5356f
+            if logo:
+                edited_logodata = bannerize_logo(logo)
+                event = await guild.create_scheduled_event(
+                    name=title,
+                    start_time=start_time,
+                    end_time=end_time,
+                    image=edited_logodata,
+                    location=location,
+                    entity_type=discord.EntityType.external,
+                    description=description,
+                    # "guild_only" is actually the only option it gives us.. Maybe that will
+                    # change in the future.
+                    privacy_level=discord.PrivacyLevel.guild_only,
+                )
+            else:
+                event = await guild.create_scheduled_event(
+                    name=title,
+                    start_time=start_time,
+                    end_time=end_time,
+                    location=location,
+                    entity_type=discord.EntityType.external,
+                    description=description,
+                    # "guild_only" is actually the only option it gives us.. Maybe that will
+                    # change in the future.
+                    privacy_level=discord.PrivacyLevel.guild_only,
+                )
+            event_link = f"https://discord.com/events/{payload.guild_id}/{event.id}"
+
+            # Post an initial message in the text channel, and the event in the upcoming
+            # CTFs channel
+            await tournament_channel.send(event_link)
+            await guild.get_channel(UPCOMING_CTFS_CHANNEL_ID).send(event_link)
+            # TODO: Channel Topic
 
 
 @client.event
@@ -112,7 +198,6 @@ async def on_raw_reaction_remove(payload):
     if payload.user_id == client.user.id:
         # Don't react to emojis done by the bot
         return
-    # TODO
 
 
 @tasks.loop(hours=1)

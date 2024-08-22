@@ -4,6 +4,10 @@ import datetime
 import traceback
 
 
+def as_kebab_case(string):
+    return string.lower().replace(" ", "-")
+
+
 def print(*args, **kwargs):
     """
     Overloading the print function for convenience. This print function will by default
