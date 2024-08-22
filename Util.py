@@ -1,3 +1,63 @@
+import builtins
+import sys
+import datetime
+import traceback
+
+
+def as_kebab_case(string):
+    return string.lower().replace(" ", "-")
+
+
+def print(*args, **kwargs):
+    """
+    Overloading the print function for convenience. This print function will by default
+    also print a timestamp to the line
+
+    Args:
+        Same args as print. With some additional kwargs:
+            mode: [normal, exception] - What mode to print in
+            ts: [true, false] - Whether to prefix a timestamp
+    """
+    mode = kwargs.get("mode")
+    if mode is not None:
+        del kwargs["mode"]
+    else:
+        mode = "normal"
+
+    ts = kwargs.get("ts")
+    if ts is not None:
+        del kwargs["ts"]
+    else:
+        ts = True
+
+    if not kwargs.get("file"):
+        if mode == "normal":
+            kwargs["file"] = sys.stdout
+        else:
+            kwargs["file"] = sys.stderr
+
+    if ts:
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        builtins.print(timestamp, end=" ", file=kwargs["file"])
+
+    builtins.print(*args, **kwargs)
+
+
+def print_exception(custom_message, e):
+    print("## ", custom_message.upper(), " ##", mode="exception")
+
+    print("MESSAGE:", e, mode="exception")
+    print(
+        2 * "-",
+        " TRACEBACK ",
+        (40 - 2 - len(" TRACEBACK ")) * "-",
+        sep="",
+        mode="exception",
+    )
+    traceback.print_exc()
+    print(40 * "-", mode="exception")
+
+
 def fancy_format_datetime(datetime_obj):
     # Based on https://stackoverflow.com/a/16671271
     # TODO: Need to check timezone info

@@ -11,9 +11,11 @@ StartLimitBurst=5
 [Service]
 Type=simple
 WorkingDirectory=/home/mildnfab/clubbot
-ExecStart=make run
+ExecStart=%h/clubbot/start.sh
 Restart=on-failure
 RestartSec=150
+StandardOutput=append:%h/clubbot/log_file
+StandardError=append:%h/clubbot/log_file
 
 [Install]
 WantedBy=default.target
