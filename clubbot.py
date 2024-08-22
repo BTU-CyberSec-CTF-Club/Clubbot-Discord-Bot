@@ -26,39 +26,39 @@ client = discord.Client(intents=intents)
 CMD_PREFIX = "!"
 
 FEEDS = [
-    #     Feeds.CTFTimeFeed(
-    #         client,
-    #         "https://ctftime.org/event/list/upcoming/rss/",
-    #         int(os.getenv("CTFTIME_CHANNEL")),
-    #         reversed_recency=True,
-    #     ),
-    #     Feeds.NewsFeed(
-    #         client,
-    #         "https://www.darkreading.com/rss.xml",
-    #         int(os.getenv("DARKREADING_CHANNEL")),
-    #         "Darkreading",
-    #     ),
-    #     Feeds.NewsFeed(
-    #         client,
-    #         "https://www.bleepingcomputer.com/feed/",
-    #         int(os.getenv("BLEEPING_COMPUTER_CHANNEL")),
-    #         "Bleeping Computer",
-    #     ),
-    #     Feeds.NewsFeed(
-    #         client,
-    #         "https://feeds.feedburner.com/TheHackersNews",
-    #         int(os.getenv("THE_HACKER_NEWS_CHANNEL")),
-    #         "The Hacker News",
-    #     ),
-    #     Feeds.NewsFeed(
-    #         client,
-    #         "https://rss.packetstormsecurity.com/",
-    #         int(os.getenv("PACKET_STORM_CHANNEL")),
-    #         "Packet Storm",
-    #     ),
-    #     Feeds.SecurityNowFeed(
-    #         client, "https://feeds.twit.tv/sn.xml", int(os.getenv("SECURITY_NOW_CHANNEL"))
-    #     ),
+    Feeds.CTFTimeFeed(
+        client,
+        "https://ctftime.org/event/list/upcoming/rss/",
+        int(os.getenv("CTFTIME_CHANNEL")),
+        reversed_recency=True,
+    ),
+    Feeds.NewsFeed(
+        client,
+        "https://www.darkreading.com/rss.xml",
+        int(os.getenv("DARKREADING_CHANNEL")),
+        "Darkreading",
+    ),
+    Feeds.NewsFeed(
+        client,
+        "https://www.bleepingcomputer.com/feed/",
+        int(os.getenv("BLEEPING_COMPUTER_CHANNEL")),
+        "Bleeping Computer",
+    ),
+    Feeds.NewsFeed(
+        client,
+        "https://feeds.feedburner.com/TheHackersNews",
+        int(os.getenv("THE_HACKER_NEWS_CHANNEL")),
+        "The Hacker News",
+    ),
+    Feeds.NewsFeed(
+        client,
+        "https://rss.packetstormsecurity.com/",
+        int(os.getenv("PACKET_STORM_CHANNEL")),
+        "Packet Storm",
+    ),
+    Feeds.SecurityNowFeed(
+        client, "https://feeds.twit.tv/sn.xml", int(os.getenv("SECURITY_NOW_CHANNEL"))
+    ),
 ]
 # TODO: Full-disclosure, reddit-netsec
 

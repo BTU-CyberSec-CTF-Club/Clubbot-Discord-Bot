@@ -456,11 +456,7 @@ class CTFTimeFeed(RSSFeed):
         if not feeditem.is_finalized:
             entry = feeditem.entry_obj
 
-            event_id = entry.id.rsplit("/", 1)[-1]
-            api_info_url = self.ctftime_api_urlformat.format(event_id=event_id)
-            ctftime_api_info = requests.get(
-                api_info_url, headers=REQUESTS_HEADERS
-            ).json()
+            ctftime_api_info = fetch_ctftime_api_info(entry.id)
 
             feeditem.description = ctftime_api_info["description"]
             feeditem.expected_participants = ctftime_api_info["participants"]
