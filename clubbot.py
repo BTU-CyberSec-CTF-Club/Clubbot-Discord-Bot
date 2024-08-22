@@ -4,21 +4,9 @@ import sys
 import time
 from aiohttp.client_exceptions import ClientConnectorError
 from Common import CTF_FLAG_EMOJI, fetch_ctftime_api_info
-
-import logging
-from logging.handlers import RotatingFileHandler
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO,
-    datefmt="%Y-%m-%d %H:%M:%S",
-    handlers=[
-        RotatingFileHandler("runtime.log", maxBytes=256 * 1024 * 1024, backupCount=1),
-        logging.StreamHandler(sys.stdout),
-    ],
-)
-
-logger.setLevel(logging.DEBUG)
+from Util import print, print_exception
+import Util
+import traceback
 
 import Feeds
 
@@ -77,7 +65,7 @@ FEEDS = [
 
 @client.event
 async def on_ready():
-    logger.info(f"{client.user.name} has connected to Discord!")
+    print(f"{client.user.name} has connected to Discord!")
     feed_update_task.start()
 
 
@@ -131,19 +119,19 @@ async def on_raw_reaction_remove(payload):
 async def feed_update_task():
     try:
         await client.wait_until_ready()
-        logger.info("Updating feeds...")
+        print("Updating feeds...")
         for feed in FEEDS:
             await feed.update()
-        logger.info("")
+        print("")
 
-        logger.info("Posting new feed items...")
+        print("Posting new feed items...")
         for feed in FEEDS:
             await feed.post_new_feed_items()
 
-        logger.info("Done.")
-        logger.info("")
-    except Exception:
-        logger.exception("Error in Feed Update Task")
+        print("Done.")
+        print("")
+    except Exception as e:
+        print_exception("ERROR IN FEED UPDATE TASK", e)
 
 
 client.run(TOKEN)

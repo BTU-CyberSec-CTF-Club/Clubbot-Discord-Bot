@@ -2,6 +2,7 @@ import feedparser
 import datetime
 import requests
 import json
+import sys
 import time
 import discord
 from lxml import html
@@ -14,11 +15,8 @@ berlin_tz = pytz.timezone("Europe/Berlin")
 from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from bs4 import BeautifulSoup
+from Util import print
 
-
-import logging
-
-logger = logging.getLogger(__name__)
 
 from Util import fancy_format_datetime, fancy_format_duration
 
@@ -72,7 +70,7 @@ class RSSFeed(ABC):
             etag=self.last_feedupdate_etag,
             modified=self.last_feedupdate_modified,
         )
-        logger.info(f"Updating feed for {self.feed_url}...")
+        print(f"Updating feed for {self.feed_url}...")
 
         # Determine last seen ID in case of initial execution
         if self.last_seen_item_id is None:
@@ -109,7 +107,7 @@ class RSSFeed(ABC):
         new_rss_feeditems = []
         for entry in self._iter_feedentries(f):
             if entry.id != self.last_seen_item_id:
-                logger.info(f"\tFound new feeditem with ID {entry.id}")
+                print(f"\tFound new feeditem with ID {entry.id}")
                 feed_item = self.make_feeditem(entry)
                 new_rss_feeditems.append(feed_item)
             else:
@@ -171,7 +169,7 @@ class RSSFeed(ABC):
                 if self.msg_emoji:
                     await msg.add_reaction(self.msg_emoji)
             except Exception:
-                logger.exception(f"Could not post embed {embed} due to errors")
+                print(f"Could not post embed {embed} due to errors", file=sys.stderr)
 
             available_feeditems.remove(feeditem)
 
