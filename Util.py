@@ -1,7 +1,47 @@
 import builtins
+import io
 import sys
 import datetime
 import traceback
+import requests
+import random
+from PIL import Image
+
+
+def bannerize_logo(logo_link):
+    """
+    Load the image at the given URL and turn it into a 5:2 banner (if the image isn't
+    already wider than this, in which case it is returned taken as is)
+
+    Returns:
+        Byte-Array of the resulting image
+    """
+    _, ending = logo_link.rsplit(".", maxsplit=1)
+
+    distinguisher = random.randint(0, 2**16)
+
+    r = requests.get(logo_link)
+    logo_img = Image.open(io.BytesIO(r.content))
+
+    img_width, img_height = logo_img.size
+    banner_width = int(img_height / 2 * 5)  # Discord recommends a banner in 5:2 format
+
+    if banner_width > img_width:
+        logo_img.convert("RGBA")
+        banner_img = Image.new(
+            mode="RGBA", size=(banner_width, img_height), color="#ffffff00"
+        )
+
+        paste_x = int(banner_width / 2 - img_width / 2)
+        banner_img.paste(logo_img, (paste_x, 0), logo_img)
+    else:
+        banner_img = logo_img
+
+    banner_byte_arr = io.BytesIO()
+    banner_img.save(banner_byte_arr, format="PNG")
+    banner_byte_arr = banner_byte_arr.getvalue()
+
+    return banner_byte_arr
 
 
 def as_kebab_case(string):

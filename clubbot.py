@@ -1,11 +1,8 @@
 #!/bin/python3
 import os
 from Common import CTF_FLAG_EMOJI, fetch_ctftime_api_info
-from Util import print, print_exception, as_kebab_case
+from Util import print, print_exception, as_kebab_case, bannerize_logo
 import dateutil.parser
-import requests
-from PIL import Image
-import random
 
 
 import Feeds
@@ -80,32 +77,6 @@ async def on_ready():
 async def on_message(message):
     if message.author != client.user and message.content.startswith(CMD_PREFIX):
         await message.channel.send("Sorry folks, no commands are implemented yet.")
-
-
-def bannerize_logo(logo_link):
-    _, ending = logo_link.rsplit(".", maxsplit=1)
-
-    distinguisher = random.randint(0, 2**16)
-    download_logofile_name = f"/tmp/logofile-{distinguisher}.{ending}"
-    edited_logofile_name = f"/tmp/logofile-{distinguisher}-edit.png"
-
-    r = requests.get(logo_link)
-    with open(download_logofile_name, "wb") as logofile:
-        for chunk in r:
-            logofile.write(chunk)
-
-    pil_img = Image.open(download_logofile_name)
-    img_width, img_height = pil_img.size
-    new_img_width = int(img_height / 2 * 5)  # Discord recommends a banner in 5:2 format
-    if new_img_width > img_width:
-        os.system(
-            f"magick {download_logofile_name} -gravity center -background none -extent {new_img_width}x{img_height} {edited_logofile_name}"
-        )
-
-    with open(edited_logofile_name, "rb") as logofile:
-        logofile_bytes = logofile.read()
-
-    return logofile_bytes
 
 
 @client.event
