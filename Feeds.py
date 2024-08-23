@@ -83,8 +83,12 @@ class RSSFeed(ABC):
                 ][0]
 
                 last_embed_url = last_msg.embeds[0].url
+                last_embed_title = last_msg.embeds[0].title
 
-                # Assumption: URL is unique within the window of the recent RSS feed contents
+                # Use URL+title as a unique identifier for the RSS feed item
+                # URL alone does not suffice, e.g. for CTFs with a qualification and a
+                # finals stage (URL will be the same there, and both are announced at a
+                # similar time)
                 for entry in self._iter_feedentries(f):
                     try:
                         elink = entry.link
@@ -96,7 +100,10 @@ class RSSFeed(ABC):
                     except AttributeError:
                         ehref = None
 
-                    if last_embed_url in [elink, ehref]:
+                    if (
+                        last_embed_url in [elink, ehref]
+                        and last_embed_title == entry.title
+                    ):
                         self.last_seen_item_id = entry.id
                         break
             except IndexError:
