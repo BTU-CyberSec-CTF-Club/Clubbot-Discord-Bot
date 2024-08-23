@@ -417,7 +417,7 @@ class NewsFeed(RSSFeed):
 
 class CTFTimeFeed(RSSFeed):
     MAX_DESCRIPTION_LENGTH = 1000
-    MAX_FEEDITEMS_POSTED = 15
+    MAX_FEEDITEMS_POSTED = 20
 
     def __init__(self, client, feed_url, associated_channel, reversed_recency=True):
         self.msg_emoji = CTF_FLAG_EMOJI
