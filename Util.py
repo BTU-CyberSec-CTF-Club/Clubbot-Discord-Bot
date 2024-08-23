@@ -5,7 +5,7 @@ import datetime
 import traceback
 import requests
 import random
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 
 def pretty_print_feeditem(entry):
@@ -33,12 +33,15 @@ def bannerize_logo(logo_link):
     Returns:
         Byte-Array of the resulting image
     """
-    _, ending = logo_link.rsplit(".", maxsplit=1)
-
-    distinguisher = random.randint(0, 2**16)
+    MAX_BANNER_IMG_WIDTH = 1500
 
     r = requests.get(logo_link)
-    logo_img = Image.open(io.BytesIO(r.content))
+    r.raise_for_status()
+    try:
+        logo_img = Image.open(io.BytesIO(r.content))
+    except UnidentifiedImageError:
+        print(f"Failed to load logo image from {logo_link}", mode="exception")
+        raise
 
     img_width, img_height = logo_img.size
     banner_width = int(img_height / 2 * 5)  # Discord recommends a banner in 5:2 format
@@ -50,9 +53,14 @@ def bannerize_logo(logo_link):
         )
 
         paste_x = int(banner_width / 2 - img_width / 2)
-        banner_img.paste(logo_img, (paste_x, 0), logo_img)
+        banner_img.paste(logo_img, (paste_x, 0))
     else:
         banner_img = logo_img
+
+    if banner_img.width > MAX_BANNER_IMG_WIDTH:
+        new_width = MAX_BANNER_IMG_WIDTH
+        new_height = int(banner_img.height * new_width / banner_img.width)
+        banner_img = banner_img.resize((new_width, new_height))
 
     banner_byte_arr = io.BytesIO()
     banner_img.save(banner_byte_arr, format="PNG")

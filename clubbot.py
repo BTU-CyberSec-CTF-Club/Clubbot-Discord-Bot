@@ -109,6 +109,11 @@ async def on_raw_reaction_add(payload):
             event_desc = ctftime_api_info["description"]
             msglink = f"https://discord.com/channels/{payload.guild_id}/{payload.channel_id}/{payload.message_id}"
             description = f"Official Website: {ctf_website} || See {msglink} for more information.\n---\n{event_desc}"
+            if len(description) > 999:
+                description = description[
+                    : 999 - len(" [...]")
+                ]  # Must be at most 1000 chars in length
+                description += " [....]"
             logo = ctftime_api_info["logo"]
 
             # Create a text channel for the CTF
