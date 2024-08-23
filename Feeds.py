@@ -100,10 +100,19 @@ class RSSFeed(ABC):
                     except AttributeError:
                         ehref = None
 
-                    if (
-                        last_embed_url in [elink, ehref]
-                        and last_embed_title == entry.title
-                    ):
+                    try:
+                        etitle = entry.title
+                    except AttributeError:
+                        etitle = None
+                    try:
+                        e_tunestitle = entry.itunes_title
+                    except AttributeError:
+                        e_tunestitle = None
+
+                    if last_embed_url in [elink, ehref] and last_embed_title in [
+                        etitle,
+                        e_tunestitle,
+                    ]:
                         self.last_seen_item_id = entry.id
                         break
             except IndexError:
