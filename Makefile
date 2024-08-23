@@ -9,7 +9,7 @@ run: venv
 	venv/bin/python3 clubbot.py 2>&1
 
 debug: venv
-	venv/bin/python3 -m pdb clubbot.py
+	venv/bin/python3 -m pdb $(PDB_ARGS) clubbot.py
 
 clean:
 	rm -rf __pycache__ venv

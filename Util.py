@@ -8,6 +8,23 @@ import random
 from PIL import Image
 
 
+def pretty_print_feeditem(entry):
+    """
+    This is used purely for debugging
+
+    Works both on feeditems (SimpleNamespace) and rss entries dicts
+    """
+    try:
+        entry = entry.entry_obj
+    except (KeyError, ValueError):
+        pass
+
+    for i, v in entry.items():
+        print(i, "---", v)
+    print(80 * "=")
+    print()
+
+
 def bannerize_logo(logo_link):
     """
     Load the image at the given URL and turn it into a 5:2 banner (if the image isn't
