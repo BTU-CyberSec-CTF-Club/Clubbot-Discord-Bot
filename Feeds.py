@@ -435,9 +435,15 @@ class CTFTimeFeed(RSSFeed):
 
     def feeditem_posting_condition(self, feeditem):
         # Only make posts if the CTF is within the next 6 weeks
-        return dateutil.parser.isoparse(feeditem.start_date) < (
+        ctf_is_soon = dateutil.parser.isoparse(feeditem.start_date) < (
             datetime.datetime.now() + datetime.timedelta(days=6 * 7)
         )
+
+        ctf_is_applicable = not (
+            feeditem.onsite == "True" or feeditem.restrictions != "Open"
+        )
+
+        return ctf_is_applicable and ctf_is_soon
 
     def make_feeditem(self, entry):
         """
