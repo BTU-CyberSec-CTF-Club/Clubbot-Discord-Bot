@@ -269,7 +269,7 @@ class NewsFeed(RSSFeed):
     def make_feeditem(self, entry):
         feeditem = {
             "id": entry.id,
-            "title": entry.title.replace("&amp;", "&").replace("&quot", '"'),
+            "title": entry.title.replace("&amp;", "&").replace("&quot;", '"'),
             "url": entry.link,
             "thumbnail": None,
             "publish_date": datetime.datetime.fromtimestamp(
