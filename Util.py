@@ -4,8 +4,8 @@ import sys
 import datetime
 import traceback
 import requests
-import random
 from PIL import Image, UnidentifiedImageError
+from Common import REQUESTS_HEADERS
 
 
 def pretty_print_feeditem(entry):
@@ -35,7 +35,7 @@ def bannerize_logo(logo_link):
     """
     MAX_BANNER_IMG_WIDTH = 1500
 
-    r = requests.get(logo_link)
+    r = requests.get(logo_link, headers=REQUESTS_HEADERS)
     r.raise_for_status()
     try:
         logo_img = Image.open(io.BytesIO(r.content))
