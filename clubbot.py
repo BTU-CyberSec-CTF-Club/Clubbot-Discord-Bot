@@ -15,6 +15,7 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 CTF_CATEGORY_ID = int(os.getenv("CTF_CATEGORY_ID"))
 UPCOMING_CTFS_CHANNEL_ID = int(os.getenv("UPCOMING_CTFS_CHANNEL_ID"))
+CURATED_NEWS_CHANNEL_ID = int(1284828672150212691)  # TODO hook up
 
 # See https://discordpy.readthedocs.io/en/stable/api.html#discord.Intents
 intents = discord.Intents(
@@ -92,7 +93,7 @@ async def on_raw_reaction_add(payload):
             # NOTE: If the system is abused, could also check if user is organizer before doing any of the following
 
             # Determine what message / CTF this is
-            ctftime_msg = await client.get_channel(payload.channel_id).fetch_message(
+            ctftime_msg = await guild.get_channel(payload.channel_id).fetch_message(
                 payload.message_id
             )
             ctftime_embed = ctftime_msg.embeds[0]
@@ -164,7 +165,36 @@ async def on_raw_reaction_add(payload):
             # CTFs channel
             await tournament_channel.send(event_link)
             await guild.get_channel(UPCOMING_CTFS_CHANNEL_ID).send(event_link)
-            # TODO: Channel Topic
+    elif payload.channel_id in map(lambda f: f.associated_channel, FEEDS):
+        reacted_on_msg = await client.get_channel(payload.channel_id).fetch_message(
+            payload.message_id
+        )
+        reacted_on_embed = reacted_on_msg.embeds[0]
+
+        # Try to find this message embed already posted in the curated channel
+        curated_channel = guild.get_channel(CURATED_NEWS_CHANNEL_ID)
+        msg = None
+        async for m in curated_channel.history(limit=200):
+            if len(m.embeds) != 0:
+                embed = m.embeds[0]
+                if all(
+                    [
+                        embed.title == reacted_on_embed.title,
+                        embed.url == reacted_on_embed.url,
+                        embed.description == reacted_on_embed.description,
+                        embed.footer == reacted_on_embed.footer,
+                    ]
+                ):
+                    # Same embed!
+                    msg = m
+                    break
+
+        # If it wasn't found, post the embed into the channel
+        if not msg:
+            msg = await curated_channel.send(embed=reacted_on_embed)
+
+        # Add the specified reaction
+        await msg.add_reaction(payload.emoji)
 
 
 @client.event
