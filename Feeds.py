@@ -9,6 +9,7 @@ from lxml import html
 import dateutil.parser
 import pytz
 from Common import CTF_FLAG_EMOJI, REQUESTS_HEADERS, fetch_ctftime_api_info
+from html import unescape as html_unescape
 
 utc_tz = pytz.timezone("Etc/UTC")
 berlin_tz = pytz.timezone("Europe/Berlin")
@@ -269,7 +270,7 @@ class NewsFeed(RSSFeed):
     def make_feeditem(self, entry):
         feeditem = {
             "id": entry.id,
-            "title": entry.title.replace("&amp;", "&").replace("&quot;", '"'),
+            "title": html_unescape(entry.title),
             "url": entry.link,
             "thumbnail": None,
             "publish_date": datetime.datetime.fromtimestamp(
@@ -395,9 +396,7 @@ class NewsFeed(RSSFeed):
                 author = author_options[0] if len(author_options) > 0 else None
 
             feeditem.thumbnail = thumb
-            feeditem.description = description.replace("&amp;", "&").replace(
-                "&quot", '"'
-            )
+            feeditem.description = html_unescape(description)
             feeditem.author = author
             feeditem.is_finalized = True
 
