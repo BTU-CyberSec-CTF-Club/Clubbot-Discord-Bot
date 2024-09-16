@@ -15,7 +15,7 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 CTF_CATEGORY_ID = int(os.getenv("CTF_CATEGORY_ID"))
 UPCOMING_CTFS_CHANNEL_ID = int(os.getenv("UPCOMING_CTFS_CHANNEL_ID"))
-CURATED_NEWS_CHANNEL_ID = int(1284828672150212691)  # TODO hook up
+CURATED_NEWS_CHANNEL_ID = int(os.getenv("CURATED_NEWS_CHANNEL"))
 
 # See https://discordpy.readthedocs.io/en/stable/api.html#discord.Intents
 intents = discord.Intents(
