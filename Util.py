@@ -1,3 +1,4 @@
+import re
 import builtins
 import io
 import sys
@@ -11,6 +12,15 @@ from Common import REQUESTS_HEADERS
 
 UTC_TZ = pytz.timezone("Etc/UTC")
 BERLIN_TZ = pytz.timezone("Europe/Berlin")
+
+HTML_TAG_REGEX = re.compile("<.*?>")
+
+
+def strip_html_tags(string):
+    """
+    Removes all html tags from the given string.
+    """
+    return HTML_TAG_REGEX.sub("", string)
 
 
 def published_or_updated_datetime(entry):

@@ -50,6 +50,12 @@ FEEDS = [
         int(os.getenv("THE_HACKER_NEWS_CHANNEL")),
         "The Hacker News",
     ),
+    Feeds.NewsFeed(
+        client,
+        "https://www.securitymagazine.com/rss/15",
+        int(os.getenv("SECURITY_MAGAZINE_CHANNEL")),
+        "Security Magazine",
+    ),
     Feeds.SecurityNowFeed(
         client, "https://feeds.twit.tv/sn.xml", int(os.getenv("SECURITY_NOW_CHANNEL"))
     ),

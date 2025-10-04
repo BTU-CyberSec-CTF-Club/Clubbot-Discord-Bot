@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from bs4 import BeautifulSoup
 
-from Util import UTC_TZ, BERLIN_TZ
+from Util import UTC_TZ, BERLIN_TZ, strip_html_tags
 from Util import (
     print,
     published_or_updated_datetime,
@@ -332,6 +332,8 @@ class NewsFeed(RSSFeed):
                         if "name" in meta.attrs and meta.attrs["name"] == "description"
                     ]
                 )
+            if description is not None:
+                description = strip_html_tags(description)
 
             author = None
             try:
