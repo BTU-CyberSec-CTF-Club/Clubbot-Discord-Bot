@@ -4,8 +4,31 @@ import sys
 import datetime
 import traceback
 import requests
+import time
+import pytz
 from PIL import Image, UnidentifiedImageError
 from Common import REQUESTS_HEADERS
+
+UTC_TZ = pytz.timezone("Etc/UTC")
+BERLIN_TZ = pytz.timezone("Europe/Berlin")
+
+
+def published_or_updated_datetime(entry):
+    """
+    Most RSS feed entries have a "published" keyword, showing what date they were
+    published at. But sometimes, they do not have it, and instead have an "updated"
+    keyword. This function chooses updated as a fallback.
+
+    Raises: RuntimeError if neither keyword is available
+    """
+    for key in ["published_parsed", "updated_parsed"]:
+        val = entry.get(key, None)
+        if val is not None:
+            return datetime.datetime.fromtimestamp(time.mktime(val), tz=UTC_TZ)
+
+    raise RuntimeError(
+        f"Could neither find a 'published' nor an 'updated' keyword in the feedentry: {entry}"
+    )
 
 
 def pretty_print_feeditem(entry):

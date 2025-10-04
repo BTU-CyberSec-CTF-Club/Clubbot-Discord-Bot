@@ -7,19 +7,20 @@ import time
 import discord
 from lxml import html
 import dateutil.parser
-import pytz
 from Common import CTF_FLAG_EMOJI, REQUESTS_HEADERS, fetch_ctftime_api_info
 from html import unescape as html_unescape
 
-utc_tz = pytz.timezone("Etc/UTC")
-berlin_tz = pytz.timezone("Europe/Berlin")
 from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from bs4 import BeautifulSoup
-from Util import print
 
-
-from Util import fancy_format_datetime, fancy_format_duration
+# Also defines UTC_TZ and BERLIN_TZ
+from Util import (
+    print,
+    published_or_updated_datetime,
+    fancy_format_datetime,
+    fancy_format_duration,
+)
 
 
 class RSSFeed(ABC):
@@ -206,9 +207,7 @@ class SecurityNowFeed(RSSFeed):
             #             "title": entry.title,
             "url": entry.link,
             "thumbnail": entry.image["href"],
-            "publish_date": datetime.datetime.fromtimestamp(
-                time.mktime(entry.published_parsed), tz=utc_tz
-            ),
+            "publish_date": published_or_updated_datetime(entry),
             "author": "Security Now! with Steve Gibson",
             "episode": entry.podcast_episode,
             "description": None,
@@ -273,9 +272,7 @@ class NewsFeed(RSSFeed):
             "title": html_unescape(entry.title),
             "url": entry.link,
             "thumbnail": None,
-            "publish_date": datetime.datetime.fromtimestamp(
-                time.mktime(entry.published_parsed), tz=utc_tz
-            ),
+            "publish_date": published_or_updated_datetime(entry),
             "author": None,
             "description": None,
             "entry_obj": entry,
@@ -518,10 +515,10 @@ class CTFTimeFeed(RSSFeed):
         embed.set_thumbnail(url=feeditem.logo_url)
 
         # More specific event info in footer
-        start_datetime = utc_tz.localize(dateutil.parser.isoparse(feeditem.start_date))
-        start_date_string = fancy_format_datetime(start_datetime.astimezone(berlin_tz))
-        end_datetime = utc_tz.localize(dateutil.parser.isoparse(feeditem.end_date))
-        end_date_string = fancy_format_datetime(end_datetime.astimezone(berlin_tz))
+        start_datetime = UTC_TZ.localize(dateutil.parser.isoparse(feeditem.start_date))
+        start_date_string = fancy_format_datetime(start_datetime.astimezone(BERLIN_TZ))
+        end_datetime = UTC_TZ.localize(dateutil.parser.isoparse(feeditem.end_date))
+        end_date_string = fancy_format_datetime(end_datetime.astimezone(BERLIN_TZ))
 
         duration_string = fancy_format_duration(
             feeditem.duration["days"], feeditem.duration["hours"]
