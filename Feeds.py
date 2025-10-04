@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from bs4 import BeautifulSoup
 
-# Also defines UTC_TZ and BERLIN_TZ
+from Util import UTC_TZ, BERLIN_TZ
 from Util import (
     print,
     published_or_updated_datetime,
