@@ -1,0 +1,6 @@
+* Might need a more robust way of handling reposts. Sometimes, the bot still reposts a
+  larger block of news messages. I assume the news sites sometimes rearrange their RSS
+  feed (maybe due to article updates), causing old messages to suddenly come after the
+  memorized "last post".
+  Idea: Use instead a ring buffer containing the MAX_POSTS_AT_ONCE last item IDs. Items that are
+  in this buffer do not get posted again. Add items to buffer after posting.
