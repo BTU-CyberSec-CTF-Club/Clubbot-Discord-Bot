@@ -10,8 +10,6 @@ cat > "/tmp/mergefilter.txt" <<-EOH
 	- .git
 	- crontab-entry.txt
 	- Clubbot.service
-	- .env.prod
-	- .env.dev
 	- .env
 EOH
 
