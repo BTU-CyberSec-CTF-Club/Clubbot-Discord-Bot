@@ -12,6 +12,7 @@ cat > "/tmp/mergefilter.txt" <<-EOH
 	- Clubbot.service
 	- .env.prod
 	- .env.dev
+	- .env
 EOH
 
 rsync -avzu --delete --progress -h --filter="merge /tmp/mergefilter.txt" ./ japan:/home/mildnfab/clubbot

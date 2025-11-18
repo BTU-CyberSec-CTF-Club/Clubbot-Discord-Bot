@@ -209,8 +209,11 @@ async def feed_update_task():
     try:
         await client.wait_until_ready()
         print("Updating feeds...")
-        for feed in FEEDS:
-            await feed.update()
+        try:
+            for feed in FEEDS:
+                await feed.update()
+        except Exception as e:
+            print_exception(f"ERROR UPDATING FEED {feed}", e)
         print("")
 
         print("Posting new feed items...")
@@ -220,7 +223,7 @@ async def feed_update_task():
         print("Done.")
         print("")
     except Exception as e:
-        print_exception("ERROR IN FEED UPDATE TASK", e)
+        print_exception("FATAL ERROR IN FEED UPDATE TASK", e)
 
 
 client.run(TOKEN)
