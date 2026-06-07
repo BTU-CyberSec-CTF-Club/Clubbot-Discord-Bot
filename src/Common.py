@@ -1,6 +1,15 @@
+"""
+Common variables and utility functions used across the software
+"""
+
+import logging
+
 import requests
 
+log = logging.getLogger(__name__)
+
 CTF_FLAG_EMOJI = "🚩"
+NEWSPAPER_EMOJI = "📰"
 REQUESTS_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
 ctftime_api_urlformat = "https://ctftime.org/api/v1/events/{event_id}/"

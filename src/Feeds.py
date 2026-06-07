@@ -1,26 +1,33 @@
-import feedparser
+"""
+Feed drivers, interfacing with different types of feeds to extract postable items in Discord's embed
+format, and keep track of the last posted items to avoid repetitions.
+"""
+
 import datetime
-import requests
 import json
-import sys
-import time
-import discord
-from lxml import html
-import dateutil.parser
-from Common import CTF_FLAG_EMOJI, REQUESTS_HEADERS, fetch_ctftime_api_info
-from html import unescape as html_unescape
-
-from types import SimpleNamespace
+import logging
 from abc import ABC, abstractmethod
-from bs4 import BeautifulSoup
+from html import unescape as html_unescape
+from types import SimpleNamespace
 
-from Util import UTC_TZ, BERLIN_TZ, strip_html_tags
+import dateutil.parser
+import discord
+import feedparser
+import requests
+from bs4 import BeautifulSoup
+from lxml import html
+
+from Common import CTF_FLAG_EMOJI, REQUESTS_HEADERS, fetch_ctftime_api_info
 from Util import (
-    print,
-    published_or_updated_datetime,
+    BERLIN_TZ,
+    UTC_TZ,
     fancy_format_datetime,
     fancy_format_duration,
+    published_or_updated_datetime,
+    strip_html_tags,
 )
+
+log = logging.getLogger(__name__)
 
 
 class RSSFeed(ABC):
@@ -72,16 +79,14 @@ class RSSFeed(ABC):
             etag=self.last_feedupdate_etag,
             modified=self.last_feedupdate_modified,
         )
-        print(f"Updating feed for {self.feed_url}...")
+        log.info(f"Updating feed for {self.feed_url}...")
 
         # Determine last seen ID in case of initial execution
         if self.last_seen_item_id is None:
             try:
                 last_msg = [
                     m
-                    async for m in self.client.get_channel(
-                        self.associated_channel
-                    ).history(limit=1)
+                    async for m in self.client.get_channel(self.associated_channel).history(limit=1)
                 ][0]
 
                 last_embed_url = last_msg.embeds[0].url
@@ -125,7 +130,7 @@ class RSSFeed(ABC):
         new_rss_feeditems = []
         for entry in self._iter_feedentries(f):
             if entry.id != self.last_seen_item_id:
-                print(f"\tFound new feeditem with ID {entry.id}")
+                log.info(f"\tFound new feeditem with ID {entry.id}")
                 feed_item = self.make_feeditem(entry)
                 new_rss_feeditems.append(feed_item)
             else:
@@ -172,27 +177,30 @@ class RSSFeed(ABC):
         Posts new (and temporarily retained) feeditems as embeds into the associated channel.
 
         If a feeditem_posting_condition was configured by the feed class implementation, only those (new) feeditems that match the condition are posted.
+
+        Returns: How many feeditems were posted
         """
         available_feeditems = self.unposted_feed_items + self.new_feed_items
-        post_candidates = list(
-            filter(self.feeditem_posting_condition, available_feeditems)
-        )
+        post_candidates = list(filter(self.feeditem_posting_condition, available_feeditems))
 
+        posted = 0
         for feeditem in post_candidates[-self.MAX_FEEDITEMS_POSTED :]:
             embed = self.make_feeditem_embed(feeditem)
             try:
-                msg = await self.client.get_channel(self.associated_channel).send(
-                    embed=embed
-                )
+                msg = await self.client.get_channel(self.associated_channel).send(embed=embed)
                 if self.msg_emoji:
                     await msg.add_reaction(self.msg_emoji)
+
+                posted += 1
             except Exception:
-                print(f"Could not post embed {embed} due to errors", file=sys.stderr)
+                log.error(f"Could not post embed {embed} due to errors")
 
             available_feeditems.remove(feeditem)
 
         self.unposted_feed_items = available_feeditems
         self.clear_new_feed_items()
+
+        return posted
 
     def clear_new_feed_items(self):
         self.new_feed_items = []
@@ -293,9 +301,7 @@ class NewsFeed(RSSFeed):
             except AttributeError:
                 # Try gaining it from a links field
                 try:
-                    link_element = list(
-                        filter(lambda e: e.type == "image/jpeg", entry.links)
-                    )[0]
+                    link_element = list(filter(lambda e: e.type == "image/jpeg", entry.links))[0]
                     thumb = link_element["href"]
                 except (AttributeError, IndexError):
                     # Fallback to trying to gain the image from the webpage
@@ -307,8 +313,7 @@ class NewsFeed(RSSFeed):
                     thumb_options = [
                         meta.attrs["content"]
                         for meta in metas
-                        if "property" in meta.attrs
-                        and meta.attrs["property"] == "og:image"
+                        if "property" in meta.attrs and meta.attrs["property"] == "og:image"
                     ]
                     thumb = thumb_options[0] if len(thumb_options) > 0 else None
 
@@ -349,8 +354,7 @@ class NewsFeed(RSSFeed):
                 author_in_metas_content = [
                     meta.attrs["content"]
                     for meta in metas
-                    if "property" in meta.attrs
-                    and meta.attrs["property"] == "article:author"
+                    if "property" in meta.attrs and meta.attrs["property"] == "article:author"
                 ] + [
                     meta.attrs["content"]
                     for meta in metas
@@ -370,8 +374,7 @@ class NewsFeed(RSSFeed):
                     author_in_jsonld_scripts = [
                         json.loads(m.text)["author"]["name"]
                         for m in soup.find_all("script")
-                        if "type" in m.attrs
-                        and m.attrs["type"] == "application/ld+json"
+                        if "type" in m.attrs and m.attrs["type"] == "application/ld+json"
                     ]
                 except KeyError:
                     author_in_jsonld_scripts = []
@@ -381,16 +384,13 @@ class NewsFeed(RSSFeed):
                         author_in_jsonld_scripts = [
                             json.loads(m.text)["author"][0]
                             for m in soup.find_all("script")
-                            if "type" in m.attrs
-                            and m.attrs["type"] == "application/ld+json"
+                            if "type" in m.attrs and m.attrs["type"] == "application/ld+json"
                         ]
                     except (KeyError, IndexError, TypeError):
                         author_in_jsonld_scripts = []
 
                 author_options = (
-                    author_in_metas_content
-                    + author_in_metas_parsely
-                    + author_in_jsonld_scripts
+                    author_in_metas_content + author_in_metas_parsely + author_in_jsonld_scripts
                 )
                 author = author_options[0] if len(author_options) > 0 else None
 
@@ -437,9 +437,7 @@ class CTFTimeFeed(RSSFeed):
             datetime.datetime.now() + datetime.timedelta(days=6 * 7)
         )
 
-        ctf_is_applicable = not (
-            feeditem.onsite == "True" or feeditem.restrictions != "Open"
-        )
+        ctf_is_applicable = not (feeditem.onsite == "True" or feeditem.restrictions != "Open")
 
         return ctf_is_applicable and ctf_is_soon
 

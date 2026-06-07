@@ -6,10 +6,10 @@ venv: requirements.txt
 	venv/bin/pip install -r requirements.txt
 
 run: venv
-	venv/bin/python3 clubbot.py 2>&1
+	venv/bin/python3 src/clubbot.py 2>&1
 
 debug: venv
-	venv/bin/python3 -m pdb $(PDB_ARGS) clubbot.py
+	venv/bin/python3 -m pdb $(PDB_ARGS) src/clubbot.py
 
 clean:
 	rm -rf __pycache__ venv

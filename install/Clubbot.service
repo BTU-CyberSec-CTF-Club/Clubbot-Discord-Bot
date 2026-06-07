@@ -14,8 +14,8 @@ WorkingDirectory=/home/mildnfab/clubbot
 ExecStart=%h/clubbot/start.sh
 Restart=on-failure
 RestartSec=150
-StandardOutput=append:%h/clubbot/log_file
-StandardError=append:%h/clubbot/log_file
+#StandardOutput=append:%h/clubbot/log_file
+#StandardError=append:%h/clubbot/log_file
 
 [Install]
 WantedBy=default.target

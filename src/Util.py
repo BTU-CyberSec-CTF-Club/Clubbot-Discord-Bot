@@ -1,14 +1,20 @@
-import re
-import builtins
-import io
-import sys
+"""
+General utility functions
+"""
+
 import datetime
-import traceback
-import requests
+import io
+import logging
+import re
 import time
+
 import pytz
+import requests
 from PIL import Image, UnidentifiedImageError
+
 from Common import REQUESTS_HEADERS
+
+log = logging.getLogger(__name__)
 
 UTC_TZ = pytz.timezone("Etc/UTC")
 BERLIN_TZ = pytz.timezone("Europe/Berlin")
@@ -41,21 +47,28 @@ def published_or_updated_datetime(entry):
     )
 
 
-def pretty_print_feeditem(entry):
+def pretty_fmt_feeditem(entry):
     """
     This is used purely for debugging
 
     Works both on feeditems (SimpleNamespace) and rss entries dicts
+
+    Returns: A string pretty formatting the item
     """
+    out = ""
+
     try:
         entry = entry.entry_obj
     except (KeyError, ValueError):
         pass
 
     for i, v in entry.items():
-        print(i, "---", v)
-    print(80 * "=")
-    print()
+        out += f"{i} --- {v}"
+
+    out += 80 * "="
+    out += "\n"
+
+    return out
 
 
 def bannerize_logo(logo_link):
@@ -73,7 +86,7 @@ def bannerize_logo(logo_link):
     try:
         logo_img = Image.open(io.BytesIO(r.content))
     except UnidentifiedImageError:
-        print(f"Failed to load logo image from {logo_link}", mode="exception")
+        log.exception(f"Failed to load logo image from {logo_link}")
         raise
 
     img_width, img_height = logo_img.size
@@ -81,9 +94,7 @@ def bannerize_logo(logo_link):
 
     if banner_width > img_width:
         logo_img.convert("RGBA")
-        banner_img = Image.new(
-            mode="RGBA", size=(banner_width, img_height), color="#ffffff00"
-        )
+        banner_img = Image.new(mode="RGBA", size=(banner_width, img_height), color="#ffffff00")
 
         paste_x = int(banner_width / 2 - img_width / 2)
         banner_img.paste(logo_img, (paste_x, 0))
@@ -106,59 +117,38 @@ def as_kebab_case(string):
     return string.lower().replace(" ", "-")
 
 
-def print(*args, **kwargs):
+def fancy_format_datetime(datetime_obj):
     """
-    Overloading the print function for convenience. This print function will by default
-    also print a timestamp to the line
+    Format a datetime with ordinal day numbers (e.g., 'Tue, 7th June 2023 14:30').
+
+    Important: The function does **not** perform any timezone conversion. The input
+    `datetime_obj` must already be in the timezone you intend to display (e.g., after
+    calling `.astimezone(your_local_tz)`). Passing a naive datetime or a UTC datetime
+    will produce a wall-clock output in that timezone, which may be incorrect for your
+    audience.
+
+    The format uses `%a` (abbreviated weekday) and `%B` (full month name), which are
+    locale‑sensitive. On non‑English systems, weekday/month names will appear in the
+    system's language.
+
+    Based on https://stackoverflow.com/a/16671271
 
     Args:
-        Same args as print. With some additional kwargs:
-            mode: [normal, exception] - What mode to print in
-            ts: [true, false] - Whether to prefix a timestamp
+        datetime_obj (datetime.datetime): An aware or naive datetime in the desired
+            display timezone.
+
+    Returns:
+        str: Formatted date string like 'Sun, 1st January 2023 09:05'.
+
+    Example:
+        >>> import pytz
+        >>> from datetime import datetime
+        >>> utc = pytz.UTC
+        >>> berlin = pytz.timezone('Europe/Berlin')
+        >>> dt = datetime(2023, 6, 7, 10, 30).replace(tzinfo=utc).astimezone(berlin)
+        >>> fancy_format_datetime(dt)
+        'Wed, 7th June 2023 12:30'
     """
-    mode = kwargs.get("mode")
-    if mode is not None:
-        del kwargs["mode"]
-    else:
-        mode = "normal"
-
-    ts = kwargs.get("ts")
-    if ts is not None:
-        del kwargs["ts"]
-    else:
-        ts = True
-
-    if not kwargs.get("file"):
-        if mode == "normal":
-            kwargs["file"] = sys.stdout
-        else:
-            kwargs["file"] = sys.stderr
-
-    if ts:
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        builtins.print(timestamp, end=" ", file=kwargs["file"])
-
-    builtins.print(*args, **kwargs)
-
-
-def print_exception(custom_message, e):
-    print("## ", custom_message.upper(), " ##", mode="exception")
-
-    print("MESSAGE:", e, mode="exception")
-    print(
-        2 * "-",
-        " TRACEBACK ",
-        (40 - 2 - len(" TRACEBACK ")) * "-",
-        sep="",
-        mode="exception",
-    )
-    traceback.print_exc()
-    print(40 * "-", mode="exception")
-
-
-def fancy_format_datetime(datetime_obj):
-    # Based on https://stackoverflow.com/a/16671271
-    # TODO: Need to check timezone info
     ordinal = lambda n: str(n) + (
         "th" if 4 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
     )

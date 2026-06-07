@@ -7,3 +7,4 @@ lxml
 python-dateutil
 pytz
 pillow
+envu
