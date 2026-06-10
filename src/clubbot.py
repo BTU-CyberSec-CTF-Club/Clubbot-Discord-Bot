@@ -29,36 +29,46 @@ bot = commands.Bot(intents=intents, command_prefix="!")
 
 FEEDS = [
     Feeds.CTFTimeFeed(
-        bot,
+        bot,  # CTFs registered at CTFtime - posts upcoming CTFs scheduled within the next 6 weeks
         "https://ctftime.org/event/list/upcoming/rss/",
         env.CTFTIME_CHANNEL,
         reversed_recency=True,
     ),
     Feeds.NewsFeed(
-        bot,
+        bot,  # Deep cybercrime investigations & scoops
+        "https://krebsonsecurity.com/feed/",
+        env.KREBS_ON_SECURITY_CHANNEL,
+        "Krebs on Security",
+    ),
+    Feeds.NewsFeed(
+        bot,  # Threat intel & security strategy (practitioner‑focused)
         "https://www.darkreading.com/rss.xml",
         env.DARKREADING_CHANNEL,
         "Darkreading",
     ),
     Feeds.NewsFeed(
-        bot,
+        bot,  # Malware, ransomware, & tech support news
         "https://www.bleepingcomputer.com/feed/",
         env.BLEEPING_COMPUTER_CHANNEL,
         "Bleeping Computer",
     ),
     Feeds.NewsFeed(
-        bot,
+        bot,  # Exploits, tools, & fast‑moving threats
         "https://feeds.feedburner.com/TheHackersNews",
         env.THE_HACKER_NEWS_CHANNEL,
         "The Hacker News",
     ),
     Feeds.NewsFeed(
-        bot,
+        bot,  # Business & corporate security insights
         "https://www.securitymagazine.com/rss/15",
         env.SECURITY_MAGAZINE_CHANNEL,
         "Security Magazine",
     ),
-    Feeds.SecurityNowFeed(bot, "https://feeds.twit.tv/sn.xml", env.SECURITY_NOW_CHANNEL),
+    Feeds.SecurityNowFeed(
+        bot,  # Weekly unique news + deep dives (audio + pdf show notes)
+        "https://feeds.twit.tv/sn.xml",
+        env.SECURITY_NOW_CHANNEL,
+    ),
 ]
 
 
