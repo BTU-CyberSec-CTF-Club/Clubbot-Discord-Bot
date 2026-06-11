@@ -9,7 +9,7 @@ StartLimitIntervalSec=1800
 StartLimitBurst=5
 
 [Service]
-Type=simple
+Type=forking
 WorkingDirectory=/home/mildnfab/clubbot
 ExecStart=%h/clubbot/start.sh
 Restart=on-failure
