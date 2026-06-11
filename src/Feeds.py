@@ -7,6 +7,7 @@ import datetime
 import json
 import logging
 from abc import ABC, abstractmethod
+from collections import deque
 from html import unescape as html_unescape
 from types import SimpleNamespace
 
@@ -31,6 +32,7 @@ log = logging.getLogger(__name__)
 
 
 class RSSFeed(ABC):
+    first_update = False
     client = None  # Discord client object
     last_feedupdate_etag = None
     last_feedupdate_modified = None
@@ -42,7 +44,12 @@ class RSSFeed(ABC):
     reversed_recency = False
     msg_emoji = None  # An emoji to add to every message
 
+    # How many feeditems to post in one make_posts operation to avoid rate limiting
     MAX_FEEDITEMS_POSTED = 10
+    # How many of the latest IDs to remember to ensure no duplicate posts
+    # Necessary since items in RSS Feeds can re-order due to modifications / updates
+    # Should be greater than your biggest RSS feed to guarantee no reposts
+    MAX_REMEMBERED_IDS = 80
 
     # An additional check on a feeditem; if False, the feeditem is not posted and retained till the next posting chance
     def feeditem_posting_condition(self, feeditem):
@@ -50,6 +57,24 @@ class RSSFeed(ABC):
 
     def _iter_feedentries(self, f):
         return iter(f.entries) if not self.reversed_recency else reversed(f.entries)
+
+    def _get_feedentry_id(self, entry):
+        url = getattr(entry, "link", None) or getattr(entry, "href", None)
+        title = getattr(entry, "title", None) or getattr(entry, "itunes_title", None)
+
+        if url and title:
+            return f"{url}{title}"
+        else:
+            return title or url
+
+    def _get_feeditem_id(self, item):
+        url = getattr(item, "url", None)
+        title = getattr(item, "title", None)
+
+        if url and title:
+            return f"{url}{title}"
+        else:
+            return title or url
 
     def __init__(self, client, feed_url, associated_channel, reversed_recency=False):
         """
@@ -59,8 +84,10 @@ class RSSFeed(ABC):
             associated_channel: ID of the discord channel to post feed updates into
             reversed_recency: If True, the newest RSS feed items will be taken from the bottom of the feed list, rather than the top.
         """
-        self.new_feed_items = []
-        self.unposted_feed_items = []
+        self.first_update = True
+
+        self.queued_feeditems = []
+        self.posted_ids = deque(maxlen=self.MAX_REMEMBERED_IDS)
 
         self.client = client
         self.feed_url = feed_url
@@ -74,73 +101,55 @@ class RSSFeed(ABC):
         If no feed update has been done within the lifetime of the script execution, the RSS feed is guaranteed to be pulled and evaluated.
         To ensure only actually new items are taken, on the first execution the associated discord channel's last message is checked and the last seen ID determined based on the message title. From then on, the remembered last seen ID is used.
         """
+        log.info(f"Updating feed for {self.feed_url}...")
         f = feedparser.parse(
             self.feed_url,
             etag=self.last_feedupdate_etag,
             modified=self.last_feedupdate_modified,
         )
-        log.info(f"Updating feed for {self.feed_url}...")
+        if hasattr(f, "etag") and f.etag:
+            self.last_feedupdate_etag = f.etag
+        if hasattr(f, "modified") and f.modified:
+            self.last_feedupdate_modified = f.modified
 
-        # Determine last seen ID in case of initial execution
-        if self.last_seen_item_id is None:
-            try:
-                last_msg = [
-                    m
-                    async for m in self.client.get_channel(self.associated_channel).history(limit=1)
-                ][0]
+        # Populate posted_ids ring buffer with discord messages
+        if self.first_update:
+            self.first_update = False
+            last_msgs = [
+                m
+                async for m in self.client.get_channel(self.associated_channel).history(
+                    limit=self.MAX_REMEMBERED_IDS
+                )
+            ]
 
-                last_embed_url = last_msg.embeds[0].url
-                last_embed_title = last_msg.embeds[0].title
-
+            for msg in last_msgs:
                 # Use URL+title as a unique identifier for the RSS feed item
                 # URL alone does not suffice, e.g. for CTFs with a qualification and a
                 # finals stage (URL will be the same there, and both are announced at a
                 # similar time)
-                for entry in self._iter_feedentries(f):
-                    try:
-                        elink = entry.link
-                    except AttributeError:
-                        elink = None
+                try:
+                    embed_url = msg.embeds[0].url
+                    embed_title = msg.embeds[0].title
+                except IndexError:
+                    log.debug(f"Encountered message without embeds: {msg.content}. Skipping")
+                    continue
 
-                    try:
-                        ehref = entry.href
-                    except AttributeError:
-                        ehref = None
+                id = embed_url + embed_title
+                if id not in self.posted_ids:
+                    self.posted_ids.append(id)
 
-                    try:
-                        etitle = entry.title
-                    except AttributeError:
-                        etitle = None
-                    try:
-                        e_tunestitle = entry.itunes_title
-                    except AttributeError:
-                        e_tunestitle = None
-
-                    if last_embed_url in [elink, ehref] and last_embed_title in [
-                        etitle,
-                        e_tunestitle,
-                    ]:
-                        self.last_seen_item_id = entry.id
-                        break
-            except IndexError:
-                # There was no valid last message in the channel, i.e. the bot never posted there.
-                # Keep last_seen None and post everything!
-                pass
-
-        new_rss_feeditems = []
+        # Parse entries returned by RSS feed and add only those that are not already posted / queued
+        new_feeditems = []
         for entry in self._iter_feedentries(f):
-            if entry.id != self.last_seen_item_id:
+            entry_id = self._get_feedentry_id(entry)
+            if entry_id not in self.posted_ids and entry not in [
+                self._get_feeditem_id(item) for item in self.queued_feeditems
+            ]:
                 log.info(f"\tFound new feeditem with ID {entry.id}")
                 feed_item = self.make_feeditem(entry)
-                new_rss_feeditems.append(feed_item)
-            else:
-                break
+                new_feeditems.append(feed_item)
 
-        self.new_feed_items += list(
-            reversed(new_rss_feeditems)
-        )  # Reversed, so newest are at the back
-        if self.new_feed_items:
-            self.last_seen_item_id = self.new_feed_items[-1].id
+        self.queued_feeditems += list(reversed(new_feeditems))
 
     @abstractmethod
     def make_feeditem(entry):
@@ -174,14 +183,13 @@ class RSSFeed(ABC):
 
     async def post_new_feed_items(self):
         """
-        Posts new (and temporarily retained) feeditems as embeds into the associated channel.
+        Posts enqueued feeditems as embeds into the associated channel.
 
-        If a feeditem_posting_condition was configured by the feed class implementation, only those (new) feeditems that match the condition are posted.
+        If a feeditem_posting_condition was configured by the feed class implementation, only those feeditems that match the condition are posted, while the remainder remains enqueued.
 
         Returns: How many feeditems were posted
         """
-        available_feeditems = self.unposted_feed_items + self.new_feed_items
-        post_candidates = list(filter(self.feeditem_posting_condition, available_feeditems))
+        post_candidates = list(filter(self.feeditem_posting_condition, self.queued_feeditems))
 
         posted = 0
         for feeditem in post_candidates[-self.MAX_FEEDITEMS_POSTED :]:
@@ -195,15 +203,9 @@ class RSSFeed(ABC):
             except Exception:
                 log.error(f"Could not post embed {embed} due to errors")
 
-            available_feeditems.remove(feeditem)
-
-        self.unposted_feed_items = available_feeditems
-        self.clear_new_feed_items()
+            self.queued_feeditems.remove(feeditem)
 
         return posted
-
-    def clear_new_feed_items(self):
-        self.new_feed_items = []
 
 
 class SecurityNowFeed(RSSFeed):

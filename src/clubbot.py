@@ -167,7 +167,7 @@ async def on_ready():
 if __name__ == "__main__":
     # Configure logging, including setting own settings for the Discord logger
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         # format="[%(asctime)s] [%(levelname)-8s] %(funcName)s: %(message)s",
         format="%(asctime)s [%(levelname)s] %(funcName)s: %(message)s",
         handlers=[
