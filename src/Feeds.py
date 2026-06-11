@@ -46,7 +46,7 @@ class RSSFeed(ABC):
     msg_emoji = None  # An emoji to add to every message
 
     # How many feeditems to post in one make_posts operation to avoid rate limiting
-    MAX_FEEDITEMS_POSTED = 100  # TODO remove
+    MAX_FEEDITEMS_POSTED = 15
     # How many of the latest IDs to remember to ensure no duplicate posts
     # Necessary since items in RSS Feeds can re-order due to modifications / updates
     # Should be greater than your biggest RSS feed to guarantee no reposts
