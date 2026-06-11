@@ -34,13 +34,13 @@ FEEDS = [
         env.CTFTIME_CHANNEL,
         reversed_recency=True,
     ),
-    Feeds.NewsFeed(
+    Feeds.ExploitDBFeed(
         bot,  # Proof of Concept Exploit Codes
         "https://www.exploit-db.com/rss.xml",
         env.EXPLOIT_DB_CHANNEL,
         "Exploit DB",
     ),
-    Feeds.NewsFeed(
+    Feeds.KrebsOnSecurityFeed(
         bot,  # Deep cybercrime investigations & scoops
         "https://krebsonsecurity.com/feed/",
         env.KREBS_ON_SECURITY_CHANNEL,

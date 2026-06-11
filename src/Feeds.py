@@ -38,6 +38,7 @@ class RSSFeed(ABC):
     last_feedupdate_modified = None
     last_seen_item_id = None
     feed_url = None
+    posted_ids = None  # Contains feeditem unique IDs that have already been posted or queued for posting (hence not new)
     new_feed_items = None  # New feed items, in order from oldest to newest
     unposted_feed_items = None  # List of feed items that have not been posted in the last iterations (from oldest to newest)
     associated_channel = None
@@ -45,7 +46,7 @@ class RSSFeed(ABC):
     msg_emoji = None  # An emoji to add to every message
 
     # How many feeditems to post in one make_posts operation to avoid rate limiting
-    MAX_FEEDITEMS_POSTED = 10
+    MAX_FEEDITEMS_POSTED = 100  # TODO remove
     # How many of the latest IDs to remember to ensure no duplicate posts
     # Necessary since items in RSS Feeds can re-order due to modifications / updates
     # Should be greater than your biggest RSS feed to guarantee no reposts
@@ -58,9 +59,26 @@ class RSSFeed(ABC):
     def _iter_feedentries(self, f):
         return iter(f.entries) if not self.reversed_recency else reversed(f.entries)
 
+    def _get_msg_feeditem_id(self, msg):
+        """
+        Takes a discord msg and, assuming it has an embed associated with some feeditem, tries to
+        build that feeditem's id from the available info.
+
+        Raises: ValueError if no valid ID can be determined
+
+        Returns: The feeditem ID
+        """
+        try:
+            embed_url = msg.embeds[0].url
+            embed_title = msg.embeds[0].title
+            return f"{embed_url}{embed_title}"
+        except IndexError:
+            raise ValueError("Message has no associated feeditem ID")
+
     def _get_feedentry_id(self, entry):
         url = getattr(entry, "link", None) or getattr(entry, "href", None)
         title = getattr(entry, "title", None) or getattr(entry, "itunes_title", None)
+        title = html_unescape(title)
 
         if url and title:
             return f"{url}{title}"
@@ -128,13 +146,11 @@ class RSSFeed(ABC):
                 # finals stage (URL will be the same there, and both are announced at a
                 # similar time)
                 try:
-                    embed_url = msg.embeds[0].url
-                    embed_title = msg.embeds[0].title
-                except IndexError:
-                    log.debug(f"Encountered message without embeds: {msg.content}. Skipping")
+                    id = self._get_msg_feeditem_id(msg)
+                except ValueError:
+                    log.debug(f"Encountered message without a feeditem id: {msg.content}. Skipping")
                     continue
 
-                id = embed_url + embed_title
                 if id not in self.posted_ids:
                     self.posted_ids.append(id)
 
@@ -142,12 +158,17 @@ class RSSFeed(ABC):
         new_feeditems = []
         for entry in self._iter_feedentries(f):
             entry_id = self._get_feedentry_id(entry)
-            if entry_id not in self.posted_ids and entry not in [
-                self._get_feeditem_id(item) for item in self.queued_feeditems
-            ]:
+            if (entry_id not in self.posted_ids) and (
+                entry_id not in [self._get_feeditem_id(item) for item in self.queued_feeditems]
+            ):
                 log.info(f"\tFound new feeditem with ID {entry.id}")
+                self.posted_ids.append(entry_id)  # Queued for being posted
                 feed_item = self.make_feeditem(entry)
                 new_feeditems.append(feed_item)
+
+        # Limit the amount of feeditems you take - can't post more anyways; helps keeping news fresh
+        # on bot restart / new server
+        new_feeditems = new_feeditems[: self.MAX_FEEDITEMS_POSTED]
 
         self.queued_feeditems += list(reversed(new_feeditems))
 
@@ -209,12 +230,23 @@ class RSSFeed(ABC):
 
 
 class SecurityNowFeed(RSSFeed):
-    def make_feeditem(self, entry):
+    def _get_feedentry_id(self, entry):
+        url = getattr(entry, "link", None) or getattr(entry, "href", None)
+        title = getattr(entry, "title", None) or getattr(entry, "itunes_title", None)
+        title = html_unescape(title)
+        # Strip the SN 1082: ... away so it's consistent with other IDs
+        title = title.split(": ", maxsplit=1)[1]
 
+        if url and title:
+            return f"{url}{title}"
+        else:
+            return title or url
+
+    def make_feeditem(self, entry):
         feeditem = {
             "id": entry.id,
             "title": entry.itunes_title,
-            #             "title": entry.title,
+            "prefixed_title": entry.title,
             "url": entry.link,
             "thumbnail": entry.image["href"],
             "publish_date": published_or_updated_datetime(entry),
@@ -297,108 +329,116 @@ class NewsFeed(RSSFeed):
 
             metas = None
 
-            thumb = None
-            try:
-                thumb = entry.media_thumbnail[0]["url"]
-            except AttributeError:
-                # Try gaining it from a links field
+            if not feeditem.thumbnail:
+                thumb = None
                 try:
-                    link_element = list(filter(lambda e: e.type == "image/jpeg", entry.links))[0]
-                    thumb = link_element["href"]
-                except (AttributeError, IndexError):
-                    # Fallback to trying to gain the image from the webpage
+                    thumb = entry.media_thumbnail[0]["url"]
+                except AttributeError:
+                    # Try gaining it from a links field
+                    try:
+                        link_element = list(filter(lambda e: e.type == "image/jpeg", entry.links))[
+                            0
+                        ]
+                        thumb = link_element["href"]
+                    except (AttributeError, IndexError):
+                        # Fallback to trying to gain the image from the webpage
+                        if not metas:
+                            r = requests.get(entry.link, headers=REQUESTS_HEADERS)
+                            soup = BeautifulSoup(r.text, features="html.parser")
+                            metas = soup.find_all("meta")
+
+                        thumb_options = [
+                            meta.attrs["content"]
+                            for meta in metas
+                            if "property" in meta.attrs and meta.attrs["property"] == "og:image"
+                        ]
+                        thumb = thumb_options[0] if len(thumb_options) > 0 else None
+
+                feeditem.thumbnail = thumb
+
+            if not feeditem.description:
+                description = None
+                try:
+                    description = entry.summary
+                    if not entry.summary:
+                        # An empty summary doesn't satisfy either.
+                        raise AttributeError
+                except AttributeError:
+                    # Fallback to gaining description from webpage meta
                     if not metas:
                         r = requests.get(entry.link, headers=REQUESTS_HEADERS)
                         soup = BeautifulSoup(r.text, features="html.parser")
                         metas = soup.find_all("meta")
 
-                    thumb_options = [
+                    description = "\n".join(
+                        [
+                            meta.attrs["content"]
+                            for meta in metas
+                            if "name" in meta.attrs and meta.attrs["name"] == "description"
+                        ]
+                    )
+                if description is not None:
+                    description = strip_html_tags(description)
+
+                feeditem.description = html_unescape(description)
+
+            if not feeditem.author:
+                author = None
+                try:
+                    author = entry.author
+                    if not author:
+                        raise AttributeError
+                except AttributeError:
+                    if not metas:
+                        r = requests.get(entry.link, headers=REQUESTS_HEADERS)
+                        soup = BeautifulSoup(r.text, features="html.parser")
+                        metas = soup.find_all("meta")
+
+                    author_in_metas_content = [
                         meta.attrs["content"]
                         for meta in metas
-                        if "property" in meta.attrs and meta.attrs["property"] == "og:image"
-                    ]
-                    thumb = thumb_options[0] if len(thumb_options) > 0 else None
-
-            description = None
-            try:
-                description = entry.summary
-                if not entry.summary:
-                    # An empty summary doesn't satisfy either.
-                    raise AttributeError
-            except AttributeError:
-                # Fallback to gaining description from webpage meta
-                if not metas:
-                    r = requests.get(entry.link, headers=REQUESTS_HEADERS)
-                    soup = BeautifulSoup(r.text, features="html.parser")
-                    metas = soup.find_all("meta")
-
-                description = "\n".join(
-                    [
+                        if "property" in meta.attrs and meta.attrs["property"] == "article:author"
+                    ] + [
                         meta.attrs["content"]
                         for meta in metas
-                        if "name" in meta.attrs and meta.attrs["name"] == "description"
+                        if "name" in meta.attrs and meta.attrs["name"] == "author"
                     ]
-                )
-            if description is not None:
-                description = strip_html_tags(description)
 
-            author = None
-            try:
-                author = entry.author
-                if not author:
-                    raise AttributeError
-            except AttributeError:
-                if not metas:
-                    r = requests.get(entry.link, headers=REQUESTS_HEADERS)
-                    soup = BeautifulSoup(r.text, features="html.parser")
-                    metas = soup.find_all("meta")
+                    try:
+                        author_in_metas_parsely = [
+                            json.loads(m.attrs["content"])["author"]
+                            for m in metas
+                            if "name" in m.attrs and m.attrs["name"] == "parsely-page"
+                        ]
+                    except KeyError:
+                        author_in_metas_parsely = []
 
-                author_in_metas_content = [
-                    meta.attrs["content"]
-                    for meta in metas
-                    if "property" in meta.attrs and meta.attrs["property"] == "article:author"
-                ] + [
-                    meta.attrs["content"]
-                    for meta in metas
-                    if "name" in meta.attrs and meta.attrs["name"] == "author"
-                ]
-
-                try:
-                    author_in_metas_parsely = [
-                        json.loads(m.attrs["content"])["author"]
-                        for m in metas
-                        if "name" in m.attrs and m.attrs["name"] == "parsely-page"
-                    ]
-                except KeyError:
-                    author_in_metas_parsely = []
-
-                try:
-                    author_in_jsonld_scripts = [
-                        json.loads(m.text)["author"]["name"]
-                        for m in soup.find_all("script")
-                        if "type" in m.attrs and m.attrs["type"] == "application/ld+json"
-                    ]
-                except KeyError:
-                    author_in_jsonld_scripts = []
-                except TypeError:
-                    # Maybe just a list not a dictionary
                     try:
                         author_in_jsonld_scripts = [
-                            json.loads(m.text)["author"][0]
+                            json.loads(m.text)["author"]["name"]
                             for m in soup.find_all("script")
                             if "type" in m.attrs and m.attrs["type"] == "application/ld+json"
                         ]
-                    except (KeyError, IndexError, TypeError):
+                    except KeyError:
                         author_in_jsonld_scripts = []
+                    except TypeError:
+                        # Maybe just a list not a dictionary
+                        try:
+                            author_in_jsonld_scripts = [
+                                json.loads(m.text)["author"][0]
+                                for m in soup.find_all("script")
+                                if "type" in m.attrs and m.attrs["type"] == "application/ld+json"
+                            ]
+                        except (KeyError, IndexError, TypeError):
+                            author_in_jsonld_scripts = []
 
-                author_options = (
-                    author_in_metas_content + author_in_metas_parsely + author_in_jsonld_scripts
-                )
-                author = author_options[0] if len(author_options) > 0 else None
+                    author_options = (
+                        author_in_metas_content + author_in_metas_parsely + author_in_jsonld_scripts
+                    )
+                    author = author_options[0] if len(author_options) > 0 else None
 
-            feeditem.thumbnail = thumb
-            feeditem.description = html_unescape(description)
-            feeditem.author = author
+                    feeditem.author = author
+
             feeditem.is_finalized = True
 
     def make_feeditem_embed(self, feeditem):
@@ -424,6 +464,80 @@ class NewsFeed(RSSFeed):
         return embed
 
 
+class ExploitDBFeed(NewsFeed):
+    def make_feeditem_embed(self, feeditem):
+        self.finalize_feeditem(feeditem)
+
+        # Color depends on category
+        exploitdb_colors = {
+            "remote": discord.Color.red(),
+            "local": discord.Color.orange(),
+            "webapps": discord.Color.blue(),
+            "dos": discord.Color.dark_grey(),
+            "shellcode": discord.Color.purple(),
+            "papers": discord.Color.teal(),
+            None: discord.Color.light_grey(),
+        }
+
+        if feeditem.title.startswith("[") and "]" in feeditem.title:
+            category = feeditem.title[1:].split("]", 1)[0].lower()
+        else:
+            category = None
+
+        color = exploitdb_colors.get(category, discord.Color.random())
+
+        # Embed with baseinfo
+        embed = discord.Embed(
+            title=feeditem.title,
+            description=(
+                feeditem.description
+                if len(feeditem.description) <= self.MAX_DESCRIPTION_LENGTH
+                else feeditem.description[0 : self.MAX_DESCRIPTION_LENGTH] + " [...]"
+            ),
+            url=feeditem.url,
+            color=color,
+            timestamp=feeditem.publish_date,
+        )
+        embed.set_author(name=self.newssource_name)
+        embed.set_image(url=feeditem.thumbnail)
+        embed.set_footer(text=feeditem.author)
+
+        return embed
+
+
+class KrebsOnSecurityFeed(NewsFeed):
+    def make_feeditem(self, entry):
+        feeditem = {
+            "id": entry.id,
+            "title": html_unescape(entry.title),
+            "url": entry.link,
+            "thumbnail": None,
+            "publish_date": published_or_updated_datetime(entry),
+            "author": None,
+            "description": None,
+            "entry_obj": entry,
+            "is_finalized": False,
+        }
+
+        # Often, but not always, Krebs also includes a cover image to the blogpost. This is not
+        # directly given in the feed and must be extracted from the HTML content.
+        if (
+            hasattr(entry, "content")
+            and entry.content
+            and (html := entry.content[0].get("value", ""))
+        ):
+            soup = BeautifulSoup(html, "html.parser")
+
+            # Find the first div or figure with class containing 'wp-caption'
+            if wp_caption := soup.find(
+                "div", class_=lambda c: c and "wp-caption" in c
+            ) or soup.find("figure", class_=lambda c: c and "wp-caption" in c):
+                if (img := wp_caption.find("img")) and img.get("src"):
+                    feeditem["thumbnail"] = img["src"]
+
+        return SimpleNamespace(**feeditem)
+
+
 class CTFTimeFeed(RSSFeed):
     MAX_DESCRIPTION_LENGTH = 1000
     MAX_FEEDITEMS_POSTED = 80
@@ -432,6 +546,26 @@ class CTFTimeFeed(RSSFeed):
         self.msg_emoji = CTF_FLAG_EMOJI
 
         super().__init__(client, feed_url, associated_channel, reversed_recency)
+
+    def _get_msg_feeditem_id(self, msg):
+        """
+        Takes a discord msg and, assuming it has an embed associated with some feeditem, tries to
+        build that feeditem's id from the available info.
+
+        Raises: ValueError if no valid ID can be determined
+
+        Returns: The feeditem ID
+        """
+        try:
+            embed_title = msg.embeds[0].title
+            embed_footer = msg.embeds[0].footer.text
+        except IndexError:
+            raise ValueError("Message has no associated feeditem ID")
+
+        # The actual identifying URL is the ctftime URL, saved in our footer in line 3
+        embed_url = embed_footer.split("\n")[2].strip()
+
+        return f"{embed_url}{embed_title}"
 
     def feeditem_posting_condition(self, feeditem):
         # Only make posts if the CTF is within the next 6 weeks
