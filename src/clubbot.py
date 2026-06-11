@@ -35,6 +35,12 @@ FEEDS = [
         reversed_recency=True,
     ),
     Feeds.NewsFeed(
+        bot,  # Proof of Concept Exploit Codes
+        "https://www.exploit-db.com/rss.xml",
+        env.EXPLOIT_DB_CHANNEL,
+        "Exploit DB",
+    ),
+    Feeds.NewsFeed(
         bot,  # Deep cybercrime investigations & scoops
         "https://krebsonsecurity.com/feed/",
         env.KREBS_ON_SECURITY_CHANNEL,
@@ -167,7 +173,7 @@ async def on_ready():
 if __name__ == "__main__":
     # Configure logging, including setting own settings for the Discord logger
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.INFO,
         # format="[%(asctime)s] [%(levelname)-8s] %(funcName)s: %(message)s",
         format="%(asctime)s [%(levelname)s] %(funcName)s: %(message)s",
         handlers=[
