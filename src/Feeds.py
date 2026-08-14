@@ -3,6 +3,7 @@ Feed drivers, interfacing with different types of feeds to extract postable item
 format, and keep track of the last posted items to avoid repetitions.
 """
 
+import asyncio
 import datetime
 import json
 import logging
@@ -156,7 +157,12 @@ class RSSFeed(ABC):
 
         # Parse entries returned by RSS feed and add only those that are not already posted / queued
         new_feeditems = []
-        for entry in self._iter_feedentries(f):
+        for i, entry in enumerate(self._iter_feedentries(f)):
+            # Only consider the newest MAX_FEEDITEMS_POSTED entries for addition
+            # -> helps not posting older entries once new entries already exist
+            if i == self.MAX_FEEDITEMS_POSTED:
+                break
+
             entry_id = self._get_feedentry_id(entry)
             if (entry_id not in self.posted_ids) and (
                 entry_id not in [self._get_feeditem_id(item) for item in self.queued_feeditems]
@@ -626,16 +632,11 @@ class CTFTimeFeed(RSSFeed):
         """
         self.finalize_feeditem(feeditem)
 
-        # Determine color
-        UNINTERESTING_COLOR = discord.Color.light_grey()
-        if feeditem.onsite == "True" or feeditem.restrictions != "Open":
-            color = UNINTERESTING_COLOR
-        else:
-            format_to_color = {
-                "Jeopardy": discord.Color.blue(),
-                "Attack-Defense": discord.Color.red(),
-            }
-            color = format_to_color.get(feeditem.ctf_format, discord.Color.purple())
+        start_dt = UTC_TZ.localize(dateutil.parser.isoparse(feeditem.start_date))
+        end_dt = UTC_TZ.localize(dateutil.parser.isoparse(feeditem.end_date))
+
+        # Determine colour based on time
+        color = self._get_ctf_color(start_dt, end_dt)
 
         # Embed with baseinfo
         embed = discord.Embed(
@@ -650,11 +651,12 @@ class CTFTimeFeed(RSSFeed):
         )
         embed.set_thumbnail(url=feeditem.logo_url)
 
-        # More specific event info in footer
-        start_datetime = UTC_TZ.localize(dateutil.parser.isoparse(feeditem.start_date))
-        start_date_string = fancy_format_datetime(start_datetime.astimezone(BERLIN_TZ))
-        end_datetime = UTC_TZ.localize(dateutil.parser.isoparse(feeditem.end_date))
-        end_date_string = fancy_format_datetime(end_datetime.astimezone(BERLIN_TZ))
+        # Format human‑readable dates and duration
+        start_berlin = start_dt.astimezone(BERLIN_TZ)
+        end_berlin = end_dt.astimezone(BERLIN_TZ)
+
+        start_date_string = fancy_format_datetime(start_berlin)
+        end_date_string = fancy_format_datetime(end_berlin)
 
         duration_string = fancy_format_duration(
             feeditem.duration["days"], feeditem.duration["hours"]
@@ -668,3 +670,156 @@ class CTFTimeFeed(RSSFeed):
         embed.set_footer(text=footer_text, icon_url=None)
 
         return embed
+
+    def _get_ctf_color(self, start_dt, end_dt):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if end_dt < now:
+            # Already over
+            return discord.Color.light_grey()
+        elif start_dt <= now <= end_dt:
+            # Currently running
+            return discord.Color.orange()
+        elif (start_dt - now).days <= 14:
+            # Upcoming
+            return discord.Color.red()
+        else:
+            # In the future
+            return discord.Color.green()
+
+    def _parse_ctf_embed(self, embed):
+        """
+        Extracts CTF info from a Discord embed footer.
+
+        Returns:
+            dict with: start_dt, end_dt, title, url (ctftime), msg_url (set later).
+
+        Raises:
+            ValueError if parsing fails.
+        """
+        if not embed.footer or "ctftime.org/event/" not in embed.footer.text:
+            raise ValueError("Not a CTFTime embed")
+
+        footer_text = embed.footer.text
+        date_line = next((line for line in footer_text.split("\n") if line.startswith("📅")), None)
+        if not date_line:
+            raise ValueError("No date line found")
+
+        date_part = date_line.replace("📅", "").strip()
+        parts = date_part.split(" - ")
+        if len(parts) < 2:
+            raise ValueError("Invalid date format")
+
+        start_str = parts[0].strip()
+        end_str = parts[1].split(" • ")[0].strip()
+
+        start_dt = dateutil.parser.parse(start_str, fuzzy=True)
+        end_dt = dateutil.parser.parse(end_str, fuzzy=True)
+
+        start_dt = BERLIN_TZ.localize(start_dt).astimezone(UTC_TZ)
+        end_dt = BERLIN_TZ.localize(end_dt).astimezone(UTC_TZ)
+
+        return {
+            "start_dt": start_dt,
+            "end_dt": end_dt,
+            "title": embed.title,
+            "ctftime_url": footer_text.split("\n")[-1].strip(),  # last line is the URL
+            "embed": embed,
+        }
+
+    async def get_upcoming_ctfs(self, days=21, max_messages=100):
+        """
+        Scans the channel and returns a list of CTFs running within the next `days`,
+        sorted by start date (soonest first). Includes already started CTFs that haven't ended yet.
+
+        Args:
+            days: How many days to consider (default: 21)
+            max_messages: How many messages to scan (default: 100)
+
+        Returns:
+            List of dicts with keys: start_dt, end_dt, title, msg_url, ctftime_url.
+        """
+        channel = self.client.get_channel(self.associated_channel)
+        if channel is None:
+            raise RuntimeError(f"Channel {self.associated_channel} not found")
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        cutoff = now + datetime.timedelta(days=days)
+
+        upcoming = []
+
+        async for msg in channel.history(limit=max_messages, oldest_first=False):
+            if not msg.embeds:
+                continue
+            embed = msg.embeds[0]
+
+            try:
+                data = self._parse_ctf_embed(embed)
+            except ValueError:
+                continue
+
+            start = data["start_dt"]
+            end = data["end_dt"]
+            if start <= cutoff and end >= now:
+                data["msg_url"] = msg.jump_url
+                upcoming.append(data)
+
+        # Sort by start date (soonest first)
+        upcoming.sort(key=lambda c: c["start_dt"])
+
+        # Deduplicate by ctftime_url, keeping the first (earliest start)
+        seen = set()
+        unique = []
+        for c in upcoming:
+            url = c["ctftime_url"]
+            if url not in seen:
+                seen.add(url)
+                unique.append(c)
+
+        return unique
+
+    async def update_embed_colors(self, max_messages=50):
+        """
+        Scans recent CTF announcements and updates embed colours based on current status.
+
+        Args:
+            max_messages: Maximum count of messages to fetch (default: 50)
+        """
+        channel = self.client.get_channel(self.associated_channel)
+        if channel is None:
+            log.warning(f"Channel {self.associated_channel} not found")
+            return
+
+        updated = 0
+        scanned = 0
+
+        async for msg in channel.history(limit=max_messages, oldest_first=False):
+            scanned += 1
+            if not msg.embeds:
+                continue
+
+            embed = msg.embeds[0]
+            if not embed.footer or "ctftime.org/event/" not in embed.footer.text:
+                continue
+
+            # Extract the date line from the footer
+            try:
+                data = self._parse_ctf_embed(embed)
+            except ValueError:
+                continue
+            start_dt = data["start_dt"]
+            end_dt = data["end_dt"]
+
+            # Apply new colour
+            new_color = self._get_ctf_color(start_dt, end_dt)
+
+            if embed.color != new_color:
+                new_embed = embed.copy()
+                new_embed.color = new_color
+                try:
+                    await msg.edit(embed=new_embed)
+                    updated += 1
+                    await asyncio.sleep(0.5)
+                except Exception as e:
+                    log.error(f"Failed to edit message {msg.id}: {e}")
+
+        log.info(f"Updated {updated} CTF embeds (scanned {scanned} messages)")

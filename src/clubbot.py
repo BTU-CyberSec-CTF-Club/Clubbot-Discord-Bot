@@ -21,6 +21,7 @@ from Actions import (
     handle_intel_role_react_add,
     handle_intel_role_react_remove,
     handle_news_reaction,
+    upcoming_ctfs_command,
 )
 from Common import CTF_FLAG_EMOJI, NEWSPAPER_EMOJI
 
@@ -164,10 +165,39 @@ async def feed_update_task():
         log.exception("Fatal error in feed update task")
 
 
+@tasks.loop(hours=24)
+async def ctf_colors_update_task():
+    try:
+        await bot.wait_until_ready()
+        log.info("Starting daily CTF embed color update")
+        for feed in FEEDS:
+            if isinstance(feed, Feeds.CTFTimeFeed):
+                await feed.update_embed_colors()
+    except Exception:
+        log.exception("Fatal error in CTF color update task")
+
+
 @bot.event
 async def on_ready():
     log.info(f"{bot.user.name} has connected to Discord!")
+    await bot.tree.sync()  # Sync slash commands
     feed_update_task.start()
+    ctf_colors_update_task.start()
+
+
+@bot.tree.command(name="upcomingctfs", description="Show upcoming CTFs in the next 3 weeks")
+async def upcomingctfs(interaction: discord.Interaction):
+    # Find the CTFTimeFeed instance
+    ctf_feed = None
+    for feed in FEEDS:
+        if isinstance(feed, Feeds.CTFTimeFeed):
+            ctf_feed = feed
+            break
+    if ctf_feed is None:
+        await interaction.response.send_message("CTF feed not available.", ephemeral=True)
+        return
+
+    await upcoming_ctfs_command(interaction, ctf_feed)
 
 
 if __name__ == "__main__":

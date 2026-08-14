@@ -2,6 +2,7 @@
 Actions of the Clubbot discord bot, to be called by the bot when handling specific events.
 """
 
+import datetime
 import logging
 
 import dateutil.parser
@@ -9,7 +10,7 @@ import discord
 import env
 
 from Common import fetch_ctftime_api_info
-from Util import bannerize_logo
+from Util import BERLIN_TZ, bannerize_logo, fancy_format_datetime
 
 log = logging.getLogger(__name__)
 
@@ -217,3 +218,74 @@ async def handle_intel_role_react_remove(payload, guild):
             log.info(f"Removed @{role.name} role from {member.display_name}")
         except Exception:
             log.exception(f"Failed to remove role {role.name} from {member.display_name}")
+
+
+async def upcoming_ctfs_command(interaction: discord.Interaction, feed):
+    """
+    Handles the /upcomingctfs command.
+
+    Args:
+        interaction: The interaction object
+        feed: the CTFTimeFeed instance.
+    """
+    try:
+        ctfs = await feed.get_upcoming_ctfs(days=21)
+    except Exception as e:
+        log.exception("Failed to fetch upcoming CTFs")
+        await interaction.response.send_message(
+            "Could not retrieve CTF data. Try again later.", ephemeral=True
+        )
+        return
+
+    if not ctfs:
+        await interaction.response.send_message(
+            "No upcoming CTFs found in the next 4 weeks.", ephemeral=True
+        )
+        return
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    week_later = now + datetime.timedelta(days=7)
+
+    # Split into three categories
+    running = [c for c in ctfs if c["start_dt"] <= now <= c["end_dt"]]
+    imminent = [c for c in ctfs if c["start_dt"] > now and c["start_dt"] <= week_later]
+    upcoming = [
+        c
+        for c in ctfs
+        if c["start_dt"] > week_later and c["start_dt"] <= now + datetime.timedelta(days=21)
+    ]
+
+    # Build an embed
+    embed = discord.Embed(
+        title="🚩 Upcoming CTFs (next 3 weeks)",
+        color=discord.Color.blue(),
+        timestamp=now,
+    )
+
+    def format_ctf_list(ctf_list, max_items=5):
+        if not ctf_list:
+            return "None"
+        lines = []
+        for i, c in enumerate(ctf_list):
+            if i >= max_items:
+                lines.append(f"... and {len(ctf_list) - max_items} more")
+                break
+            start_berlin = c["start_dt"].astimezone(BERLIN_TZ)
+            date_str = fancy_format_datetime(start_berlin)
+            # Compact format: bullet, title, date, and a clickable details link
+            lines.append(f"• **{c['title']}** – {date_str} – ([Details]({c['msg_url']}))")
+        return "\n".join(lines)
+
+    # Build description – skip empty sections
+    parts = []
+    if running:
+        parts.append(f"🔴 **Running**\n\n{format_ctf_list(running)}")
+    if imminent:
+        parts.append(f"🚀 **Imminent (next 7 days)**\n\n{format_ctf_list(imminent)}")
+    if upcoming:
+        parts.append(f"📆 **Upcoming (next 21 days)**\n\n{format_ctf_list(upcoming)}")
+    description = "\n\n".join(parts)
+
+    embed.description = description
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
