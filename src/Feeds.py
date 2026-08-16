@@ -553,6 +553,10 @@ class CTFTimeFeed(RSSFeed):
 
         super().__init__(client, feed_url, associated_channel, reversed_recency)
 
+    def _get_feedentry_id(self, entry):
+        url = getattr(entry, "id", None)  # The CTFTime URL is the unique identifier
+        return url
+
     def _get_msg_feeditem_id(self, msg):
         """
         Takes a discord msg and, assuming it has an embed associated with some feeditem, tries to
@@ -560,10 +564,9 @@ class CTFTimeFeed(RSSFeed):
 
         Raises: ValueError if no valid ID can be determined
 
-        Returns: The feeditem ID
+        Returns: The feeditem ID (in this case, the CTFTime URL is the unique identifier)
         """
         try:
-            embed_title = msg.embeds[0].title
             embed_footer = msg.embeds[0].footer.text
         except IndexError:
             raise ValueError("Message has no associated feeditem ID")
@@ -571,7 +574,7 @@ class CTFTimeFeed(RSSFeed):
         # The actual identifying URL is the ctftime URL, saved in our footer in line 3
         embed_url = embed_footer.split("\n")[2].strip()
 
-        return f"{embed_url}{embed_title}"
+        return f"{embed_url}"
 
     def feeditem_posting_condition(self, feeditem):
         # Only make posts if the CTF is within the next 6 weeks
