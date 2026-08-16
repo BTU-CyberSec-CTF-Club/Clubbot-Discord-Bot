@@ -50,8 +50,10 @@ class RSSFeed(ABC):
     MAX_FEEDITEMS_POSTED = 15
     # How many of the latest IDs to remember to ensure no duplicate posts
     # Necessary since items in RSS Feeds can re-order due to modifications / updates
-    # Should be greater than your biggest RSS feed to guarantee no reposts
-    MAX_REMEMBERED_IDS = 80
+    # Should be much greater than your biggest RSS feed to guarantee no reposts - say the feed
+    # always gives 80 items, then it should be able to fit 80 items (in case all of them are
+    # reposted) and then some (because also not-yet-posted but already seen feeditems are registered here and need space)
+    MAX_REMEMBERED_IDS = 200
 
     # An additional check on a feeditem; if False, the feeditem is not posted and retained till the next posting chance
     def feeditem_posting_condition(self, feeditem):
